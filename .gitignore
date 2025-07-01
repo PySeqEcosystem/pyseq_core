@@ -205,3 +205,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# Other Stuff
+# local/personal notebook & scripts
+local_notebooks
+local_scripts
+personal_notebooks
+personal_scripts
+*.DS_Store
+
