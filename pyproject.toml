@@ -17,16 +17,11 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  'attrs',
-  'pyyaml',
-  'ipykernel', 
-  ]
-
-[project.optional-dependencies]
-dev = [
-  'pytest',
-  'pytest-asyncio'
+  "pydantic>=2.11.7",
+  "tomlkit>=0.13.3",
+  "attrs>=25.3.0",
 ]
+
 
 [project.urls]
 Homepage = "https://github.com/pypa/sampleproject"
@@ -48,3 +43,13 @@ log_date_format = "%Y-%m-%d %H:%M:%S"
 log_cli_level = "DEBUG"
 asyncio_default_fixture_loop_scope = "module"
 asyncio_default_test_loop_scope = "module"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.0.0",
+    "pytest-cov>=6.2.1",
+]
+lint = [
+    "ruff>=0.12.1",
+]
