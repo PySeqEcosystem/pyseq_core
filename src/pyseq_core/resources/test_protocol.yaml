@@ -1,0 +1,28 @@
+---
+name: test_protocol
+cycles: 1
+steps:
+    - VALV: PBS
+    - PUMP: 1000
+    - HOLD: 10
+    - VALV: water
+    - PUMP: 500
+    - HOLD: 20
+    - WAIT: microscope
+    - VALV: imaging
+    - PUMP: 100
+    - IMAGE: 1
+---
+name: test_protocol_2
+cycles: 10
+steps:
+    - VALV: imager
+    - PUMP: 750
+    - HOLD: 5
+    - VALV: formamide
+    - PUMP: 200
+    - HOLD: 30
+    - WAIT: microscope
+    - VALV: imaging
+    - PUMP: 1000
+    - IMAGE: 2

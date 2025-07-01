@@ -1,0 +1,2 @@
+pyseq_core
+sequencers

@@ -1,0 +1,21 @@
+[roi1A]
+flowcell = "A"
+LLx = 15
+LLy = 15
+URx = 10
+URy = 10
+
+[roi1B]
+flowcell = "B"
+LLx = 15
+LLy = 15
+URx = 10
+URy = 10
+
+[A]
+roi2 = {LLx=15, LLy=15, URx=10, URy=10}
+roi3 = {LLx=15, LLy=15, URx=10, URy=10}
+
+[B]
+roi2 = {LLx=15, LLy=15, URx=10, URy=10}
+roi3 = {LLx=15, LLy=15, URx=10, URy=10}

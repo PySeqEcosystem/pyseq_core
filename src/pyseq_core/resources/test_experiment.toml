@@ -1,0 +1,41 @@
+[experiment]
+name = "TestExperiment"
+#image_path = '.'
+#focus_path = '.'
+#roi_path = '.'
+#protocol_path = None
+
+[reagents]
+PBS = {port=1, flow_rate=500}
+water = {port=2, flow_rate=500}
+formamide = 9
+imager = 11
+imaging = 10
+
+[image]
+nz = 1
+
+[expose]
+n_exposures = 0
+
+[focus]
+routine = "partial_once" 
+
+[stage]
+tilt1 = 21500  
+tilt2 = 21500  
+tilt3 = 21500  
+
+
+[optics]
+power.red = 0
+power.green = 0                                                  
+filter.red = "home"
+filter.green = "home"
+exposure.Camera_558_687 = 1
+exposure.Camera_610_740 = 1                                           
+
+[pump]
+flow_rate = 100                                                                 # uL/min
+pause_time = 1                                                                  # Time to wait between aspirate and dispense in s
+waste_flow_rate = 12000                                                         # uL/min

@@ -1,0 +1,36 @@
+[experiment]
+image_path = ""
+focus_path = ""
+roi_path = ""
+protocol_path = ""
+
+[reagents]
+
+[image]
+nz = 0
+
+[expose]
+n_exposures = 0
+
+[focus]
+routine = "partial_once" 
+
+[stage]
+tilt1 = 21500  
+tilt2 = 21500  
+tilt3 = 21500
+z_init = 30000  
+
+
+[optics]
+power.red = 0
+power.green = 0                                                  
+filter.red = "home"
+filter.green = "home"
+exposure.Camera_558_687 = 1
+exposure.Camera_610_740 = 1                                           
+
+[pump]
+flow_rate = 100                                                                 # uL/min
+pause_time = 1                                                                  # Time to wait between aspirate and dispense in s
+waste_flow_rate = 12000                                                         # uL/min
