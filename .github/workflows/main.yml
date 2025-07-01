@@ -1,11 +1,11 @@
-on:
-  push:
-    branches:
-    - main
-    - release/*
-  pull_request:
-    branches:
-    - main
+on: workflow_dispatch
+  # push:
+  #   branches:
+  #   - main
+  #   - release/*
+  # pull_request:
+  #   branches:
+  #   - main
 
 name: Example
 
@@ -20,7 +20,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install the latest version of uv and set the python version
-    - uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@v6
       with: 
         python-version: ${{ matrix.python-version }}
     - name: Test with python ${{ matrix.python-version }} and ${{ matrix.os }}
