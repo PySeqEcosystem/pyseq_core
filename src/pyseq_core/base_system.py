@@ -684,12 +684,12 @@ class BaseSequencer(BaseSystem):
                            roi: Union[ROI, List[ROI]] = [], 
                            flowcells: Union[str, List[str]] = None):
     
-        if roi == None and flowcells != None:
+        if roi is None and flowcells is not None:
             for fc in self._get_fc_list(flowcells):
                 _fc =  self._flowcells[fc]
                 _fc._to_microscope(routine, list(_fc._rois.items()))
-            return 
-        elif roi == None and flowcells is None:
+            return
+        elif roi is None and flowcells is None:
             raise ValueError('Specify at least 1 flow cell')
         else:
             if not isinstance(roi, list):
