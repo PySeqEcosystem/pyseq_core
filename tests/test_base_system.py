@@ -33,6 +33,7 @@ async def check_fc_queue(sequencer, only_check_filled=False, timeout=None):
 
 @pytest.mark.asyncio
 async def test_pump(BaseTestSequencer):
+    print(BaseTestSequencer.flowcells["A"].Pump.config)
     BaseTestSequencer.pump(volume=100, flow_rate=4000, reagent=1)
     assert await check_fc_queue(BaseTestSequencer, timeout=1)
 

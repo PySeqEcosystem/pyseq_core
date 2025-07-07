@@ -27,6 +27,10 @@ Test:
     step: 200
     min_val: -7000000
     max_val: 7000000
+  TiltStage:
+    spum: 100
+    min_val: 0
+    max_val: 30000
   ZStage:
     spum: 1
     step: 1
@@ -45,9 +49,9 @@ Test:
     min_val: 0
     max_val: 400 
   RedFilterWheel: &red_filter_wheel
-    valid_list: ['home', 'open', '0.1', '1.0']
+    valid_list: {'home':0, 'open':1, '0.1':2, '1.0':3}
   GreenFilterWheel: &green_filter_wheel 
-    valid_list: ['home', 'open', '0.1', '2.0']
+    valid_list: ['home':0, 'open':1, '0.1':2, '2.0':3]
   Camera_558_687:
     exposure: &camera_exposure
       min_val: 0.1

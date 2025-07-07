@@ -172,8 +172,8 @@ class TestXStage(TestCOM, BaseXStage):
         return self._position
 
 
-class TestZStage(TestCOM, BaseZStage):
-    def __init__(self, name="ZStage"):
+class TestTiltStage(TestCOM, BaseZStage):
+    def __init__(self, name="TiltStage"):
         super().__init__(name)
         self._position = 0
 
@@ -190,7 +190,7 @@ class TestZStage(TestCOM, BaseZStage):
 
 
 class TestObjectiveStage(TestCOM, BaseObjectiveStage):
-    def __init__(self, name="ObjStage"):
+    def __init__(self, name="ZStage"):
         super().__init__(name)
         self._position = 0
 
@@ -222,22 +222,6 @@ class TestPump(TestCOM, BasePump):
         """Pump a specified volume at a specified flow rate."""
         LOGGER.debug(f"{self.name}::Reverse pump {volume} uL at {flow_rate} uL/min")
         return True
-
-    @property
-    def min_volume(self):
-        return 0
-
-    @property
-    def max_volume(self):
-        return 2000
-
-    @property
-    def min_flow_rate(self):
-        return 100
-
-    @property
-    def max_flow_rate(self):
-        return 20000
 
 
 @define
@@ -298,17 +282,6 @@ class TestTemperatureController(TestCOM, BaseTemperatureController):
 @define
 class TestMicroscope(BaseMicroscope):
     instruments: dict = field(init=False)
-    # def __init__(self):
-    #     super().__init__(name='TestMicroscope')
-    #     self.instruments = {'Camera': {'red':TestCamera('red'), 'green':TestCamera('green')},
-    #                         'FilterWheek': {'red':TestFilterWheel('red'), 'green':TestFilterWheel('green')},
-    #                         'Laser': {'red':TestLaser('red'), 'green':TestLaser('green')},
-    #                         'Shutter': TestShutter(),
-    #                         'XStage': TestXStage(),
-    #                         'YStage': TestYStage(),
-    #                         'ZStage': TestZStage(),
-    #                         'ObjStage': TestObjectiveStage(),
-    #     }
 
     @instruments.default
     def set_instruments(self):
@@ -322,8 +295,8 @@ class TestMicroscope(BaseMicroscope):
             "Shutter": TestShutter(),
             "XStage": TestXStage(),
             "YStage": TestYStage(),
-            "ZStage": TestZStage(),
-            "ObjStage": TestObjectiveStage(),
+            "TiltStage": TestTiltStage(),
+            "ZStage": TestObjectiveStage(),
         }
         return instruments
 
