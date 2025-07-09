@@ -1,3 +1,13 @@
+# Prerequsites
+1. git https://git-scm.com/
+2. uv https://docs.astral.sh/uv/
+
+# Install 
+1. Clone repo (git clone)
+2. uv sync 
+3. uv run pre-commit install 
+
+
 Style:
 use params to check anything from user such as experiment config files, machine config files, recipes, etc.
 use attrs to format data such as imaging, regions of interests, or pumping parameters, etc. 
