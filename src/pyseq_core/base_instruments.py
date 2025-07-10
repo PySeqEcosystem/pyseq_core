@@ -5,6 +5,8 @@ from attrs import define, field
 from typing import Union
 from functools import cached_property
 from warnings import warn
+import time
+import asyncio
 
 
 @define
@@ -417,19 +419,24 @@ class BaseTemperatureController(BaseInstrument):
     def max_temperature(self):
         return self.config.get("max_val")
 
-    @property
+    # Don't use property setter, can't use explicity with async
+    # ie can't do `await temperature = t`
     @abstractmethod
-    async def temperature(self, temperature):
+    async def set_temperature(self, temperature):
         """Set the temperature of the device."""
         pass
 
-    @temperature.setter
+    # Don't use property getter, can't use explicity with async
+    # ie can't do `await temperature`
     @abstractmethod
-    async def temperature(self):
+    async def get_temperature(self):
         """Get the current temperature of the device."""
         pass
 
-    @abstractmethod
-    async def wait_for_temperature(self, temperature, timeout=None):
+    async def wait_for_temperature(self, temperature, timeout=None, interval=5):
         """Wait for the system to reach a specified temperature."""
-        pass
+        start = time.time()
+        while self.get_temperature != temperature:
+            if timeout is not None and start + timeout > time.time():
+                break
+            await asyncio.sleep(interval)

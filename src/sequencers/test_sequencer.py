@@ -255,28 +255,18 @@ class TestTemperatureController(TestCOM, BaseTemperatureController):
         super().__init__(name)
         self._temperature = 25
 
-    @property
-    async def temperature(self, temperature):
+    async def set_temperature(self, temperature):
         """Set the temperature."""
-        LOGGER.debug(f"Setting {self._name} to {temperature}C")
+        LOGGER.debug(f"Setting {self.name} to {temperature}C")
         self._temperature = temperature
 
-    @temperature.getter
-    async def temperature(self):
+    async def get_temperature(self):
         """Get the current temperature."""
         return self._temperature
 
-    async def wait_for_temperature(self, temperature):
-        """Wait for the flowcell  to reach a specified temperature."""
-        return await self.temperature(temperature)
-
-    @property
-    def min_temperature(self):
-        return 4
-
-    @property
-    def max_temperature(self):
-        return 60
+    # async def wait_for_temperature(self, temperature):
+    #     """Wait for the flowcell  to reach a specified temperature."""
+    #     return await self.set_temperature(temperature)
 
 
 @define
@@ -481,7 +471,7 @@ class TestFlowCell(BaseFlowCell):
         # if port is not None:
         #     self.select_port(port) #Add task so port change is added to logs
         print(f"{self.name} :: Pumping {volume} at {flow_rate}")
-        await self.Pump.pump(volume, flow_rate)
+        await self.Pump.pump(volume, flow_rate, **kwargs)
         print(f"{self.name} :: Pumped {volume} at {flow_rate}")
 
     async def _reverse_pump(self, volume, flow_rate, **kwargs):
@@ -492,7 +482,7 @@ class TestFlowCell(BaseFlowCell):
 
     async def _temperature(self, temperature):
         """Set the temperature of the flow cell."""
-        await self._TemperatureController.temperature(temperature)
+        await self.TemperatureController.set_temperature(temperature)
 
     # async def _hold(self, duration: numbers.Real):
     #     """Async hold for specified duration seconds."""

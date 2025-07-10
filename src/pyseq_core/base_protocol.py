@@ -362,8 +362,8 @@ class TemperatureCommand(BaseModel):
     flowcell: Union[str, int] = None
 
     @model_validator(mode="after")
-    def validate_temperature(self, value) -> Self:
-        validate_min_max("Temperature{self.flowcell}", value)
+    def validate_temperature(self) -> Self:
+        validate_min_max(f"TemperatureController{self.flowcell}", self.temperature)
         return self
 
 

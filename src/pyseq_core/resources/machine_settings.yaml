@@ -1,6 +1,10 @@
 name: Test
 Test:
   flowcells: ['A', 'B']
+  TemperatureControllerA: &fc_temp
+    min_val: 4
+    max_val: 60
+  TemperatureControllerB: *fc_temp
   PumpA: &pump
     volume:
       min_val: 100 #uL 

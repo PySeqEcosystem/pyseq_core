@@ -533,7 +533,7 @@ class BaseFlowCell(BaseSystem):
 
     def temperature(self, temperature: Union[int, float]) -> int:
         """Set the temperature of the flow cell."""
-        description = "Set temperature to {temperature}"
+        description = f"Set temperature to {temperature} C"
         return self.add_task(description, self._temperature, temperature)
 
     async def _to_microscope(
@@ -720,13 +720,18 @@ class BaseSequencer(BaseSystem):
             task_ids.append(self._flowcells[fc].wait(wait_command.event))
         return task_ids
 
-    def temperature(self, temperature_command: TemperatureCommand = None, **kwargs):
+    def temperature(
+        self,
+        flowcells: Union[str, int] = None,
+        temperature_command: TemperatureCommand = None,
+        **kwargs,
+    ):
         """Hold specified flow cell for specified duration in minutes, used for incubations."""
-
-        if temperature_command is None:
-            temperature_command = TemperatureCommand(**kwargs)
-        fc_ = self._get_fc_list(temperature_command.flowcell)
+        fc_ = self._get_fc_list(flowcells)
         for fc in fc_:
+            if temperature_command is None:
+                kwargs.update({"flowcell": fc})
+                temperature_command = TemperatureCommand(**kwargs)
             self._flowcells[fc].temperature(temperature_command.temperature)
 
     def _roi_to_microscope(
