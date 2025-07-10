@@ -75,7 +75,8 @@ class ReagentsManager:
     ) -> bool:
         """Check reagent flow rate"""
         # Validate flow rates
-        return self.flowcells[flowcell].Pump(flow_rate=flow_rate)
+        validate_min_max("flow_rate", flow_rate, HW_CONFIG[f"Pump{flowcell}"])
+        return True
 
     def add(self, reagent: BaseReagent = None, **kwargs):
         """Add reagent to flowcell."""
@@ -97,7 +98,7 @@ class ReagentsManager:
 
         if reagent is None:
             assert "name" in kwargs, "name must be specified"
-            assert "flowcell" in kwargs, "flowcel must be specified"
+            assert "flowcell" in kwargs, "flowcell must be specified"
             flowcell = kwargs["flowcell"]
             if kwargs["name"] in self.flowcells[flowcell].reagents:
                 reagent = self.flowcells[flowcell].reagents[kwargs["name"]].copy()
@@ -140,6 +141,8 @@ class ReagentsManager:
 
         # Update port
         if reagents[reagent_name]["port"] != reagent["port"]:
+            # validate port
+            validate_in(HW_CONFIG[f"Valve{flowcell}"]["valid_list"], reagent["port"])
             # check if port used by another reagent
             existing_reagent = self.get_reagent_key(flowcell, reagent["port"])
             if len(existing_reagent) == 0:  # or existing_reagent == reagent['name']:

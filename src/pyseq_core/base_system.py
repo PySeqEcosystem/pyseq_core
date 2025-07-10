@@ -462,15 +462,16 @@ class BaseFlowCell(BaseSystem):
         """Select a port on the valve."""
 
         if isinstance(reagent, str):
-            port = self.reagents[reagent]["port"]
+            if reagent in self.reagents:
+                port = self.reagents[reagent]["port"]
+            else:
+                return False
         elif isinstance(reagent, int):
             port = reagent
 
-        if self.Valve(port):
-            description = f"Select {reagent} at port {port}."
-            self.add_task(description, self.Valve.select, port)
-            return True
-        return False
+        description = f"Select {reagent} at port {port}."
+        self.add_task(description, self.Valve.select, port)
+        return True
 
     def pump(
         self,
@@ -486,17 +487,17 @@ class BaseFlowCell(BaseSystem):
             if not self.select_port(reagent):
                 raise KeyError(f"{reagent} is invalid for Valve {self.name}")
 
-        if flow_rate is None:
+        # default flow_rate = 0
+        if not flow_rate:
             flow_rate = self.reagents[reagent].get("flow_rate")
 
-        if self.Pump(volume, flow_rate):
-            if not reverse:
-                description = f"Pump {volume} uL at {flow_rate} uL/min."
-                return self.add_task(
-                    description, self.Pump.pump, volume, flow_rate, **kwargs
-                )
-            else:
-                return self.reverse_pump(volume, flow_rate, **kwargs)
+        if not reverse:
+            description = f"Pump {volume} uL at {flow_rate} uL/min."
+            return self.add_task(
+                description, self.Pump.pump, volume, flow_rate, **kwargs
+            )
+        else:
+            return self.reverse_pump(volume, flow_rate, **kwargs)
 
     def reverse_pump(
         self,
@@ -518,7 +519,6 @@ class BaseFlowCell(BaseSystem):
     def hold(self, duration: Union[int, float]) -> int:
         """Hold for specified duration (minutes)."""
         description = f"Hold for {duration} minutes."
-        # self.add_task(description, asyncio.sleep, duration*60)
         return self.add_task(description, self._hold, duration)
 
     def wait(self, event: str) -> int:
@@ -612,25 +612,6 @@ class BaseFlowCell(BaseSystem):
         """Async send message to the user and wait for a response."""
 
         await asyncio.wait_for(asyncio.to_thread(input, message), timeout)
-
-    # @abstractmethod
-    # async def _temperature(self, temperature):
-    #     """Set the temperature of the flow cell."""
-    #     pass
-
-    # @abstractmethod
-    # async def _select_port(self, port):
-    #     pass
-
-    # @abstractmethod
-    # async def _pump(self, volume, flow_rate, **kwargs):
-    #     """Async pump a specified volume of a reagant at a specified flow rate."""
-    #     pass
-
-    # @abstractmethod
-    # async def _reverse_pump(self, volume, flow_rate, **kwargs):
-    #     """Async pump a specified volume of a reagant at a specified flow rate."""
-    #     pass
 
 
 @define

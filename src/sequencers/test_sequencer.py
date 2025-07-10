@@ -465,49 +465,6 @@ class TestFlowCell(BaseFlowCell):
             _.append(instrument._configure())
         await asyncio._gather(*_)
 
-    # async def _select_port(self, port):
-    #     await self.Valve.select(port)
-    #     print(f"{self.name} :: Selected {port}")
-
-    # async def _pump(self, volume, flow_rate, **kwargs):
-    #     """Pump a specified volume of a reagent at a specified flow rate."""
-    #     # if port is not None:
-    #     #     self.select_port(port) #Add task so port change is added to logs
-    #     print(f"{self.name} :: Pumping {volume} at {flow_rate}")
-    #     await self.Pump.pump(volume, flow_rate, **kwargs)
-    #     print(f"{self.name} :: Pumped {volume} at {flow_rate}")
-
-    # async def _reverse_pump(self, volume, flow_rate, **kwargs):
-    #     """Pump a specified volume of a reagent at a specified flow rate."""
-    #     # if port is not None:
-    #     #     self.select_port(port) #Add task so port change is added to logs
-    #     await self.Pump.reverse_pump(volume, flow_rate)
-
-    # async def _temperature(self, temperature):
-    #     """Set the temperature of the flow cell."""
-    #     await self.TemperatureController.set_temperature(temperature)
-
-    # async def _hold(self, duration: numbers.Real):
-    #     """Async hold for specified duration seconds."""
-    #     await asyncio.sleep(duration)
-
-    # async def _wait(self, event):
-    #     """Async wait for an event"""
-    #     if len(self.FlowCellSignal._listeners) == 0:
-    #         pass
-    #     else:
-    #         self.FlowCellSignal.events.update({event: asyncio.Event()})
-    #     await self.FlowCellSignal.events[event].wait()
-    #     try:
-    #         del self.FlowCellSignal.events[event]
-    #     except KeyError:
-    #         LOGGER.warning(f"Event {event} not found in FlowCellSignal events")
-
-    # async def _user_wait(self, message, timeout=None):
-    #     """Async end message to the user and wait for a response."""
-    #     async with asyncio.timeout(timeout):
-    #         await asyncio.to_thread(input, message)
-
 
 @define
 class TestSequencer(BaseSequencer):

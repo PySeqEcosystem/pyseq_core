@@ -4,7 +4,6 @@ import yaml
 from attrs import define, field
 from typing import Union
 from functools import cached_property
-from warnings import warn
 import time
 import asyncio
 
@@ -61,18 +60,18 @@ class BaseInstrument(ABC):
 class BaseStage(BaseInstrument):
     _position: Union[int, float] = field(init=False)
 
-    def __call__(self, position):
-        self._position = position
+    # def __call__(self, position):
+    #     self._position = position
 
-    @_position.validator
-    def _validate_position(self, attribute, value):
-        min_val = self.min_position
-        max_val = self.max_position
+    # @_position.validator
+    # def _validate_position(self, attribute, value):
+    #     min_val = self.min_position
+    #     max_val = self.max_position
 
-        if not min_val <= value <= max_val:
-            raise ValueError(
-                f"{self.name} position must be between {min_val} and {max_val}"
-            )
+    #     if not min_val <= value <= max_val:
+    #         raise ValueError(
+    #             f"{self.name} position must be between {min_val} and {max_val}"
+    #         )
 
     @cached_property
     def min_position(self) -> Union[float, int]:
@@ -100,33 +99,33 @@ class BasePump(BaseInstrument):
     _volume: Union[float, int] = field(init=False)
     _flow_rate: Union[float, int] = field(init=False)
 
-    @_volume.validator
-    def _validate_volume(self, attribute, value):
-        min_val = self.min_volume
-        max_val = self.max_volume
+    # @_volume.validator
+    # def _validate_volume(self, attribute, value):
+    #     min_val = self.min_volume
+    #     max_val = self.max_volume
 
-        if not min_val <= value <= max_val:
-            raise ValueError(f"Volume must be between {min_val} and {max_val}")
+    #     if not min_val <= value <= max_val:
+    #         raise ValueError(f"Volume must be between {min_val} and {max_val}")
 
-    @_flow_rate.validator
-    def _validate_flow_rate(self, attribute, value):
-        min_val = self.min_flow_rate
-        max_val = self.max_flow_rate
+    # @_flow_rate.validator
+    # def _validate_flow_rate(self, attribute, value):
+    #     min_val = self.min_flow_rate
+    #     max_val = self.max_flow_rate
 
-        if not min_val <= value <= max_val:
-            raise ValueError(f"Flow rate must be between {min_val} and {max_val}")
+    #     if not min_val <= value <= max_val:
+    #         raise ValueError(f"Flow rate must be between {min_val} and {max_val}")
 
-    def __call__(self, volume=None, flow_rate=None) -> bool:
-        """Validate pump volume and flow rate."""
-        try:
-            if volume is not None:
-                self._volume = volume
-            if flow_rate is not None:
-                self._flow_rate = flow_rate
-            return True
-        except ValueError as e:
-            warn(f"{e}", UserWarning)
-            return False
+    # def __call__(self, volume=None, flow_rate=None) -> bool:
+    #     """Validate pump volume and flow rate."""
+    #     try:
+    #         if volume is not None:
+    #             self._volume = volume
+    #         if flow_rate is not None:
+    #             self._flow_rate = flow_rate
+    #         return True
+    #     except ValueError as e:
+    #         warn(f"{e}", UserWarning)
+    #         return False
 
     @cached_property
     def min_volume(self) -> Union[float, int]:
@@ -173,19 +172,19 @@ class BaseValve(BaseInstrument):
     #             ports[p+1] = p+1
     #     self.ports = ports
 
-    def __call__(self, port) -> bool:
-        """Validate port selection on the valve."""
-        try:
-            [_port, self._port] = [
-                self._port,
-                port,
-            ]  # Save current port and validate new port
-            return True
-        except ValueError as e:
-            warn(f"{e}", UserWarning)
-            return False
-        finally:
-            self._port = _port  # Put current port back in place
+    # def __call__(self, port) -> bool:
+    #     """Validate port selection on the valve."""
+    #     try:
+    #         [_port, self._port] = [
+    #             self._port,
+    #             port,
+    #         ]  # Save current port and validate new port
+    #         return True
+    #     except ValueError as e:
+    #         warn(f"{e}", UserWarning)
+    #         return False
+    #     finally:
+    #         self._port = _port  # Put current port back in place
 
     @abstractmethod
     async def select(self, port, **kwargs):
@@ -241,18 +240,18 @@ class BaseLaser(BaseInstrument):
     #                                 BaseInstrument.config.get('max_power', 100)),
     #   instantiate = True,)
 
-    def __call__(self, power):
-        self._power = power
+    # def __call__(self, power):
+    #     self._power = power
 
-    @_power.validator
-    def _validate_power(self, attribute, value):
-        min_val = self.min_power
-        max_val = self.max_power
+    # @_power.validator
+    # def _validate_power(self, attribute, value):
+    #     min_val = self.min_power
+    #     max_val = self.max_power
 
-        if not min_val <= value <= max_val:
-            raise ValueError(
-                f"{self.name} power must be between {min_val} and {max_val}"
-            )
+    #     if not min_val <= value <= max_val:
+    #         raise ValueError(
+    #             f"{self.name} power must be between {min_val} and {max_val}"
+    #         )
 
     @cached_property
     def min_power(self):
@@ -293,7 +292,7 @@ class BaseObjectiveStage(BaseStage):
 
 @define
 class BaseFilterWheel(BaseInstrument):
-    filters: dict = field(init=False)
+    _filters: dict = field(init=False)
     _filter: Union[float, str] = field(init=False)
     # _filter_dict = BaseInstrument.config.get('filters', {'home':0, 'open':1})
     # _filter = param.Selector(objects = [str(k) for k in _filter_dict.keys()],
@@ -302,13 +301,13 @@ class BaseFilterWheel(BaseInstrument):
     def __attrs_post_init__(self):
         self._filters = self.config.get("valid_list")
 
-    def __call__(self, filter):
-        self._filter = filter
+    # def __call__(self, filter):
+    #     self._filter = filter
 
-    @_filter.validator
-    def validate_filter(self, attribute, value):
-        if value not in self.filters:
-            raise ValueError(f"Filter {value} not listed on {self.name}")
+    # @_filter.validator
+    # def validate_filter(self, attribute, value):
+    #     if value not in self.filters:
+    #         raise ValueError(f"Filter {value} not listed on {self.name}")
 
     @property
     @abstractmethod
@@ -357,18 +356,18 @@ class BaseCamera(BaseInstrument):
         """Get the captured image."""
         pass
 
-    def __call__(self, exposure: float):
-        self._exposure = exposure
+    # def __call__(self, exposure: float):
+    #     self._exposure = exposure
 
-    @_exposure.validator
-    def validate_exposure(self, attribute, value):
-        min_val = self.min_exposure
-        max_val = self.max_exposure
+    # @_exposure.validator
+    # def validate_exposure(self, attribute, value):
+    #     min_val = self.min_exposure
+    #     max_val = self.max_exposure
 
-        if not min_val <= value <= max_val:
-            raise ValueError(
-                f"{self.name} exposure must be between {min_val} and {max_val}"
-            )
+    #     if not min_val <= value <= max_val:
+    #         raise ValueError(
+    #             f"{self.name} exposure must be between {min_val} and {max_val}"
+    #         )
 
     @property
     @abstractmethod
@@ -398,18 +397,18 @@ class BaseTemperatureController(BaseInstrument):
     #                                       BaseInstrument.config.get('max_temperature', 50)),
     #                             instantiate = True,)
 
-    def __call__(self, temperature):
-        self._temperature = temperature
+    # def __call__(self, temperature):
+    #     self._temperature = temperature
 
-    @_temperature.validator
-    def validate_temperaute(self, attribute, value):
-        min_val = self.min_temperature
-        max_val = self.max_temperature
+    # @_temperature.validator
+    # def validate_temperaute(self, attribute, value):
+    #     min_val = self.min_temperature
+    #     max_val = self.max_temperature
 
-        if not min_val <= value <= max_val:
-            raise ValueError(
-                f"{self.name} temperature must be between {min_val} and {max_val}"
-            )
+    #     if not min_val <= value <= max_val:
+    #         raise ValueError(
+    #             f"{self.name} temperature must be between {min_val} and {max_val}"
+    #         )
 
     @cached_property
     def min_temperature(self):
