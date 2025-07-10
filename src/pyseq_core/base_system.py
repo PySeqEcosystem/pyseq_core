@@ -468,7 +468,7 @@ class BaseFlowCell(BaseSystem):
 
         if self.Valve(port):
             description = f"Select {reagent} at port {port}."
-            self.add_task(description, self._select_port, port)
+            self.add_task(description, self.Valve.select, port)
             return True
         return False
 
@@ -493,7 +493,7 @@ class BaseFlowCell(BaseSystem):
             if not reverse:
                 description = f"Pump {volume} uL at {flow_rate} uL/min."
                 return self.add_task(
-                    description, self._pump, volume, flow_rate, **kwargs
+                    description, self.Pump.pump, volume, flow_rate, **kwargs
                 )
             else:
                 return self.reverse_pump(volume, flow_rate, **kwargs)
@@ -512,7 +512,7 @@ class BaseFlowCell(BaseSystem):
 
         description = f"Reverse pump {volume} uL at {flow_rate} uL/min."
         return self.add_task(
-            description, self._reverse_pump, volume, flow_rate, **kwargs
+            description, self.Pump.reverse_pump, volume, flow_rate, **kwargs
         )
 
     def hold(self, duration: Union[int, float]) -> int:
@@ -534,7 +534,9 @@ class BaseFlowCell(BaseSystem):
     def temperature(self, temperature: Union[int, float]) -> int:
         """Set the temperature of the flow cell."""
         description = f"Set temperature to {temperature} C"
-        return self.add_task(description, self._temperature, temperature)
+        return self.add_task(
+            description, self.TemperatureController.set_temperature, temperature
+        )
 
     async def _to_microscope(
         self,
@@ -611,24 +613,24 @@ class BaseFlowCell(BaseSystem):
 
         await asyncio.wait_for(asyncio.to_thread(input, message), timeout)
 
-    @abstractmethod
-    async def _temperature(self, temperature):
-        """Set the temperature of the flow cell."""
-        pass
+    # @abstractmethod
+    # async def _temperature(self, temperature):
+    #     """Set the temperature of the flow cell."""
+    #     pass
 
-    @abstractmethod
-    async def _select_port(self, port):
-        pass
+    # @abstractmethod
+    # async def _select_port(self, port):
+    #     pass
 
-    @abstractmethod
-    async def _pump(self, volume, flow_rate, **kwargs):
-        """Async pump a specified volume of a reagant at a specified flow rate."""
-        pass
+    # @abstractmethod
+    # async def _pump(self, volume, flow_rate, **kwargs):
+    #     """Async pump a specified volume of a reagant at a specified flow rate."""
+    #     pass
 
-    @abstractmethod
-    async def _reverse_pump(self, volume, flow_rate, **kwargs):
-        """Async pump a specified volume of a reagant at a specified flow rate."""
-        pass
+    # @abstractmethod
+    # async def _reverse_pump(self, volume, flow_rate, **kwargs):
+    #     """Async pump a specified volume of a reagant at a specified flow rate."""
+    #     pass
 
 
 @define
@@ -686,7 +688,9 @@ class BaseSequencer(BaseSystem):
             if pump_command is None:
                 kwargs.update({"flowcell": fc})
                 pump_command = PumpCommand(**kwargs)
-            self._flowcells[fc].pump(**pump_command.model_dump())
+            pump_kwargs = pump_command.model_dump()
+            del pump_kwargs["flowcell"]
+            self._flowcells[fc].pump(**pump_kwargs)
 
     def hold(
         self,
@@ -732,7 +736,9 @@ class BaseSequencer(BaseSystem):
             if temperature_command is None:
                 kwargs.update({"flowcell": fc})
                 temperature_command = TemperatureCommand(**kwargs)
-            self._flowcells[fc].temperature(temperature_command.temperature)
+            temperature_kwargs = temperature_command.model_dump()
+            del temperature_kwargs["flowcell"]
+            self._flowcells[fc].temperature(**temperature_kwargs)
 
     def _roi_to_microscope(
         self,

@@ -210,17 +210,20 @@ class TestPump(TestCOM, BasePump):
     def __init__(self, name: str):
         super().__init__(name)
 
-    async def pump(self, volume, flow_rate, pause=0.1):
+    async def pump(self, volume, flow_rate, pause_time=0.1, waste_flow_rate=12000):
         """Pump a specified volume at a specified flow rate."""
         LOGGER.debug(f"{self.name}::Pump {volume} uL at {flow_rate} uL/min")
-        print(f"{self.name}::simulated sleep for {volume / flow_rate} s")
-        # await asyncio.sleep(volume/flow_rate)
-        print(f"{self.name}::Pumped {volume} uL at {flow_rate} uL/min")
+        LOGGER.debug(f"{self.name}::Pause for {pause_time} s")
+        LOGGER.debug(f"{self.name}::Purge at {waste_flow_rate} ul/min")
         return True
 
-    async def reverse_pump(self, volume, flow_rate, pause=0.1):
+    async def reverse_pump(
+        self, volume, flow_rate, pause_time=0.1, waste_flow_rate=12000
+    ):
         """Pump a specified volume at a specified flow rate."""
         LOGGER.debug(f"{self.name}::Reverse pump {volume} uL at {flow_rate} uL/min")
+        LOGGER.debug(f"{self.name}::Pause for {pause_time} s")
+        LOGGER.debug(f"{self.name}::Reverse purge at {waste_flow_rate} ul/min")
         return True
 
 
@@ -462,27 +465,27 @@ class TestFlowCell(BaseFlowCell):
             _.append(instrument._configure())
         await asyncio._gather(*_)
 
-    async def _select_port(self, port):
-        await self.Valve.select(port)
-        print(f"{self.name} :: Selected {port}")
+    # async def _select_port(self, port):
+    #     await self.Valve.select(port)
+    #     print(f"{self.name} :: Selected {port}")
 
-    async def _pump(self, volume, flow_rate, **kwargs):
-        """Pump a specified volume of a reagent at a specified flow rate."""
-        # if port is not None:
-        #     self.select_port(port) #Add task so port change is added to logs
-        print(f"{self.name} :: Pumping {volume} at {flow_rate}")
-        await self.Pump.pump(volume, flow_rate, **kwargs)
-        print(f"{self.name} :: Pumped {volume} at {flow_rate}")
+    # async def _pump(self, volume, flow_rate, **kwargs):
+    #     """Pump a specified volume of a reagent at a specified flow rate."""
+    #     # if port is not None:
+    #     #     self.select_port(port) #Add task so port change is added to logs
+    #     print(f"{self.name} :: Pumping {volume} at {flow_rate}")
+    #     await self.Pump.pump(volume, flow_rate, **kwargs)
+    #     print(f"{self.name} :: Pumped {volume} at {flow_rate}")
 
-    async def _reverse_pump(self, volume, flow_rate, **kwargs):
-        """Pump a specified volume of a reagent at a specified flow rate."""
-        # if port is not None:
-        #     self.select_port(port) #Add task so port change is added to logs
-        await self.Pump.reverse_pump(volume, flow_rate)
+    # async def _reverse_pump(self, volume, flow_rate, **kwargs):
+    #     """Pump a specified volume of a reagent at a specified flow rate."""
+    #     # if port is not None:
+    #     #     self.select_port(port) #Add task so port change is added to logs
+    #     await self.Pump.reverse_pump(volume, flow_rate)
 
-    async def _temperature(self, temperature):
-        """Set the temperature of the flow cell."""
-        await self.TemperatureController.set_temperature(temperature)
+    # async def _temperature(self, temperature):
+    #     """Set the temperature of the flow cell."""
+    #     await self.TemperatureController.set_temperature(temperature)
 
     # async def _hold(self, duration: numbers.Real):
     #     """Async hold for specified duration seconds."""

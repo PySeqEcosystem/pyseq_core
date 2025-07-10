@@ -145,12 +145,12 @@ class BasePump(BaseInstrument):
         return self.config.get("flow_rate").get("max_val")
 
     @abstractmethod
-    async def pump(self, volume, flow_rate, pause):
+    async def pump(self, volume, flow_rate, **kwargs):
         """Pump a specified volume at a specified flow rate."""
         pass
 
     @abstractmethod
-    async def reverse_pump(self, volume, flow_rate, pause):
+    async def reverse_pump(self, volume, flow_rate, *kwargs):
         """Pump a specified volume at a specified flow rate in reverse direction."""
         pass
 
@@ -188,7 +188,7 @@ class BaseValve(BaseInstrument):
             self._port = _port  # Put current port back in place
 
     @abstractmethod
-    async def select(self, port):
+    async def select(self, port, **kwargs):
         """Select port on the valve."""
         pass
 
