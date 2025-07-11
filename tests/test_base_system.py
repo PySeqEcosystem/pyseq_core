@@ -5,11 +5,10 @@ import asyncio
 async def check_fc_queue(sequencer, only_check_filled=False, timeout=None):
     """Check to see if queue gets filled and then emptied."""
     try:
-        flowcells = sequencer._get_fc_list()
-
+        flowcells = sequencer.enabled_flowcells
         # Check tasks added to queue
         for fc in flowcells:
-            assert len(sequencer.flowcells[fc]._queue_dict) >= 1
+            assert len(fc._queue_dict) >= 1
 
         if only_check_filled:
             return True
@@ -17,13 +16,13 @@ async def check_fc_queue(sequencer, only_check_filled=False, timeout=None):
         # Wait for tasks to finish
         _ = []
         for fc in flowcells:
-            _.append(sequencer.flowcells[fc]._queue.join())
+            _.append(fc._queue.join())
 
         await asyncio.wait_for(asyncio.gather(*_), timeout)
 
         # Check tasks cleared
         for fc in flowcells:
-            assert len(sequencer.flowcells[fc]._queue_dict) == 0
+            assert len(fc._queue_dict) == 0
 
         return True
 
@@ -33,13 +32,12 @@ async def check_fc_queue(sequencer, only_check_filled=False, timeout=None):
 
 @pytest.mark.asyncio
 async def test_temperature(BaseTestSequencer):
-    flowcells = BaseTestSequencer._get_fc_list()
     for t in [25, 37, 50]:
         BaseTestSequencer.temperature(temperature=t)
-        for fc in flowcells:
-            await BaseTestSequencer.flowcells[
-                fc
-            ].TemperatureController.wait_for_temperature(t, timeout=1, interval=0.01)
+        for fc in BaseTestSequencer.enabled_flowcells:
+            await fc.TemperatureController.wait_for_temperature(
+                t, timeout=1, interval=0.01
+            )
 
 
 @pytest.mark.asyncio
