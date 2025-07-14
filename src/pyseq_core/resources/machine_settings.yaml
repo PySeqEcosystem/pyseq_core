@@ -46,16 +46,16 @@ Test:
       max_val: 30000
     tilt2: *tilt
     tilt3: *tilt
-  RedLaser: &red_laser
+  redLaser: &red_laser
     min_val: 0
     max_val: 400
-  GreenLaser: &green_laser
+  greenLaser: &green_laser
     min_val: 0
     max_val: 400 
-  RedFilterWheel: &red_filter_wheel
+  redFilterWheel: &red_filter_wheel
     valid_list: {'home':0, 'open':1, '0.1':2, '1.0':3}
-  GreenFilterWheel: &green_filter_wheel 
-    valid_list: ['home':0, 'open':1, '0.1':2, '2.0':3]
+  greenFilterWheel: &green_filter_wheel 
+    valid_list: {'home':0, 'open':1, '0.1':2, '2.0':3}
   Camera_558_687:
     exposure: &camera_exposure
       min_val: 0.1

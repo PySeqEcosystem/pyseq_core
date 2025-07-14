@@ -47,3 +47,7 @@ reagents should follow reagents parameters, with default flow rates, pause, etc 
 Recipes
 recipes follow simple yaml flow style and then formatted into more structured and annotated yaml
 
+ROIs
+Can fully define stage and image parameters in recipe specific.
+If only image parameters in recipe, all ROIs defined for flowcell will be imaged with these parameters
+default image parameters can be defined in experiment config

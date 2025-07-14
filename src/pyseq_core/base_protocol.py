@@ -264,11 +264,6 @@ OpticsParams = create_model("OpticsParams", **custom_params(DEFAULT_CONFIG["opti
 class Optics(OpticsParams):
     """Custom validated optical parameters"""
 
-    # @model_validator(mode="after")
-    # def validate_optics(self) -> Self:
-    #     self_dict  = self.model_dump()
-    #     recursive_validate(self_dict, HW_CONFIG['optics'])
-    #     return self
     pass
 
 
@@ -639,7 +634,6 @@ def check_expose(
     if ptype is dict and "stage" in params:
         stage = StagePosition(params["stage"])
         dict_stage = stage.model_dump()
-        # sequencer.microscope.validate_stage(**dict_stage)
         dict_command.update({"stage": dict_stage})
 
     return dict_command
@@ -723,9 +717,6 @@ def need_reagents(fprotocols: dict, reagents: dict) -> int:
             if "PUMP" in step[0] and isinstance(step[1]["reagent"], str):
                 if step[1]["reagent"] not in reagents:
                     missing_reagents.append(step[1]["reagent"])
-            # elif 'VALVE' in step[0] and isinstance(step[1]['port'], str):
-            #     if step[1]['reagent'] not in reagents:
-            #         missing_reagents.append(step[1]['port'])
 
     missing_reagents = set(missing_reagents)
     for r in missing_reagents:

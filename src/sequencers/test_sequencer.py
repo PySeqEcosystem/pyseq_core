@@ -1,4 +1,5 @@
 from pyseq_core.base_system import BaseFlowCell, BaseMicroscope, BaseSequencer, ROI
+from pyseq_core.base_protocol import Optics
 
 # from pyseq_core.baseROI import BaseROI, TestROI
 from pyseq_core.base_instruments import (
@@ -15,17 +16,12 @@ from pyseq_core.base_instruments import (
     BaseTemperatureController,
 )
 from typing import Literal
-from attrs import define, field, asdict
+from attrs import define, field
 import logging
 import asyncio
 
 
 LOGGER = logging.getLogger("PySeq")
-# LOG_CONFIG_PATH = Path.home() / '.config/pyseq2500/logger_config.yaml'
-
-# with open(LOG_CONFIG_PATH, 'r') as f:
-#     log_config = yaml.safe_load(LOG_CONFIG_PATH)
-# LOGGER.config.dictConfig(log_config)
 
 
 class TestCOM:
@@ -38,48 +34,46 @@ class TestCOM:
 
     async def initialize(self):
         """Initialize the instrument."""
-        LOGGER.info(f"Initializing {self._name}")
+        LOGGER.info(f"Initializing {self.name}")
 
     async def shutdown(self):
         """Shutdown the instrument."""
-        LOGGER.info(f"Shutting down {self._name}")
+        LOGGER.info(f"Shutting down {self.name}")
 
     async def get_status(self):
         """Retrieve the current status of the instrument."""
         pass
 
     async def configure(self):
-        LOGGER.info(f"Configuring {self._name}")
+        LOGGER.info(f"Configuring {self.name}")
         pass
 
     async def command(self, command: str):
         """Send a command to the instrument."""
-        LOGGER.info(f"{self._name}: Tx: {command}")
+        LOGGER.info(f"{self.name}: Tx: {command}")
 
 
 class TestCamera(TestCOM, BaseCamera):
     def __init__(self, name: str):
         super().__init__(name=name)
-        self._name = name
         self._exposure = 1
 
     async def capture(self):
         """Capture an image."""
-        LOGGER.debug(f"Capturing image with {self._name}")
+        LOGGER.debug(f"Capturing image with {self.name}")
         return True
 
-    async def save_image(self):
+    async def save_image(self, im_name: str):
         """Save an image"""
-        LOGGER.debug(f"Saving image from {self._name}")
+        LOGGER.debug(f"{self.name}: Saving image as {im_name}.tif")
         return True
 
-    @property
-    async def exposure(self, time):
+    async def set_exposure(self, time):
+        LOGGER.debug(f"{self.name}: Set exposure to {time}")
         self._exposure = time
 
-    @exposure.getter
-    async def exposure(self):
-        return self._exposure
+    async def get_exposure(self):
+        return self.exposure
 
 
 class TestShutter(TestCOM, BaseShutter):
@@ -88,54 +82,38 @@ class TestShutter(TestCOM, BaseShutter):
 
     async def open(self):
         """Open the shutter."""
-        LOGGER.debug(f"Opening shutter {self._name}")
+        LOGGER.debug(f"Opening shutter {self.name}")
         return True
 
     async def close(self):
         """Close the shutter."""
-        LOGGER.debug(f"Closing shutter {self._name}")
+        LOGGER.debug(f"Closing shutter {self.name}")
         return True
 
 
 class TestFilterWheel(TestCOM, BaseFilterWheel):
     def __init__(self, color: str):
-        super().__init__(f"{color}Filter")
+        super().__init__(f"{color}FilterWheel")
 
-    @property
-    async def filter(self, filter):
+    async def set_filter(self, filter):
         """Select a filter on the wheel."""
-        LOGGER.debug(f"Selecting filter {filter} on {self._name}")
+        LOGGER.debug(f"Selecting filter {filter} on {self.name}")
         self._filter = filter
-
-    @filter.getter
-    async def filter(self):
-        """Get the currently selected filter."""
-        return self._filter
 
 
 class TestLaser(TestCOM, BaseLaser):
     def __init__(self, color: str):
-        super().__init__(f"{color}Filter")
+        super().__init__(f"{color}Laser", color=color)
         self._power = 0
 
-    @property
-    async def power(self, power):
+    async def set_power(self, power):
         """Set laser power."""
-        LOGGER.debug(f"Setting {self._name} laser to {self._power}")
+        LOGGER.debug(f"Setting {self.name} to {power}")
         self._power = power
 
-    @power.getter
-    async def power(self):
-        """Get laser power."""
-        return self._power
-
-    @property
-    def min_power(self):
-        return 0
-
-    @property
-    def max_power(self):
-        return 500
+    async def get_power(self, power):
+        """Set laser power."""
+        return self.power
 
 
 class TestYStage(TestCOM, BaseYStage):
@@ -143,15 +121,11 @@ class TestYStage(TestCOM, BaseYStage):
         super().__init__(name)
         self._position = 0
 
-    @property
-    async def position(self, position):
-        """Move the stage to a new position."""
-        LOGGER.debug(f"Moving {self._name} to {position}")
-        self._position = position
+    async def move(self, position):
+        LOGGER.debug(f"Moving {self.name} to {position}")
+        self.position = position
 
-    @position.getter
-    async def position(self):
-        """Get the current position of the stage."""
+    async def get_position(self):
         return self._position
 
 
@@ -160,15 +134,11 @@ class TestXStage(TestCOM, BaseXStage):
         super().__init__(name)
         self._position = 0
 
-    @property
-    async def position(self, position):
-        """Move the stage to a new position."""
-        LOGGER.debug(f"Moving {self._name} to {position}")
-        self._position = position
+    async def move(self, position):
+        LOGGER.debug(f"Moving {self.name} to {position}")
+        self.position = position
 
-    @position.getter
-    async def position(self):
-        """Get the current position of the stage."""
+    async def get_position(self):
         return self._position
 
 
@@ -177,15 +147,11 @@ class TestTiltStage(TestCOM, BaseZStage):
         super().__init__(name)
         self._position = 0
 
-    @property
-    async def position(self, position):
-        """Move the stage to a new position."""
-        LOGGER.debug(f"Moving {self._name} to {position}")
-        self._position = position
+    async def move(self, position):
+        LOGGER.debug(f"Moving {self.name} to {position}")
+        self.position = position
 
-    @position.getter
-    async def position(self):
-        """Get the current position of the stage."""
+    async def get_position(self):
         return self._position
 
 
@@ -194,15 +160,11 @@ class TestObjectiveStage(TestCOM, BaseObjectiveStage):
         super().__init__(name)
         self._position = 0
 
-    @property
-    async def position(self, position):
-        """Move the stage to a new position."""
-        LOGGER.debug(f"Moving {self._name} to {position}")
-        self._position = position
+    async def move(self, position):
+        LOGGER.debug(f"Moving {self.name} to {position}")
+        self.position = position
 
-    @position.getter
-    async def position(self):
-        """Get the current position of the stage."""
+    async def get_position(self):
         return self._position
 
 
@@ -229,12 +191,6 @@ class TestPump(TestCOM, BasePump):
 
 @define
 class TestValve(TestCOM, BaseValve):
-    # def __init__(self, name:str, ports:dict={}):
-    #     BaseValve.__init__(self, name)
-    # if len(ports) == 0:
-    #     ports = {i:i for i in range(1, self._n_ports+1)}
-    # self._ports = ports
-
     async def select(self, port):
         """Pump a specified volume at a specified flow rate."""
 
@@ -267,10 +223,6 @@ class TestTemperatureController(TestCOM, BaseTemperatureController):
         """Get the current temperature."""
         return self._temperature
 
-    # async def wait_for_temperature(self, temperature):
-    #     """Wait for the flowcell  to reach a specified temperature."""
-    #     return await self.set_temperature(temperature)
-
 
 @define
 class TestMicroscope(BaseMicroscope):
@@ -279,8 +231,11 @@ class TestMicroscope(BaseMicroscope):
     @instruments.default
     def set_instruments(self):
         instruments = {
-            "Camera": {"red": TestCamera("red"), "green": TestCamera("green")},
-            "FilterWheek": {
+            "Camera": {
+                "Camera_558_687": TestCamera("Camera_558_687"),
+                "Camera_610_740": TestCamera("Camera_610_740"),
+            },
+            "FilterWheel": {
                 "red": TestFilterWheel("red"),
                 "green": TestFilterWheel("green"),
             },
@@ -338,82 +293,98 @@ class TestMicroscope(BaseMicroscope):
 
     async def _capture(self, roi: ROI, im_name: str):
         """Capture an image and save it to the specified filename."""
-        xpos = self.XStage._position
-        zpos = self.ObjStage._position
-        im_name = f"{im_name}_x{xpos}_z{zpos}"
+
         LOGGER.debug(f"Acquire {im_name}")
         await self.Shutter.open()
-        await self.YStage.position(roi.y_last)
+        await self.YStage.move(roi.stage.y_last)
         await self.Shutter.close()
-        LOGGER.debug(f"Image saved to {im_name}.tif")
-        await self.YStage.position(roi.y_init)
+        _ = []
+        for c in self.Camera.values():
+            _.append(c.save_image(im_name))
+        _.append(self.YStage.move(roi.stage.y_init))
+        await asyncio.gather(*_)
 
-    async def _z_stack(self, roi: ROI, im_name: str, direction: Literal[1, -1] = 1):
+    async def _z_stack(self, roi: ROI, im_name: str):
         """Perform a z-stack acquisition."""
-        LOGGER.debug(
-            f"Z stack {roi.name} {roi.z_init} to {roi.z_last} in {roi.z_step} steps"
-        )
+
+        direction = roi.stage.z_direction
+        step = roi.stage.z_step
         if direction == 1:
-            z_init = roi.z_init
-            z_last = roi.z_last
+            z_init = roi.stage.z_init
+            z_last = roi.stage.z_last
         else:
-            z_init = roi.z_last
-            z_last = roi.z_init
-        for i, z in enumerate(range(z_init, z_last, direction * roi.z_step)):
-            LOGGER.debug(f"Z stack {i}/{roi.nz}")
-            await self._ZStage.position(z)
-            await self._capture(roi, im_name)
+            z_init = roi.stage.z_last
+            z_last = roi.stage.z_init
+        LOGGER.debug(f"Z stack {roi.name} {z_init} to {z_last} in {step} steps")
+        for i, z in enumerate(range(z_init, z_last, direction * step)):
+            LOGGER.debug(f"Z stack {i}/{roi.stage.nz}")
+            await self.ZStage.move(z)
+            await self._capture(roi, f"{im_name}_z{z}")
 
-    async def _scan(self, roi: ROI, im_name: str):
+    async def _scan(self, roi: ROI, im_name: str = ""):
         """Perform a scan over the specified region of interest (ROI)."""
-        LOGGER.debug(
-            f"Scanning {roi.name} {roi.x_init} to {roi.x_last} in {roi.x_step} steps"
-        )
-        if im_name is None:
-            im_name = roi.name
-        for i, x in enumerate(range(roi.x_init, roi.x_last, roi.x_step)):
-            await self._XStage.position(x)
-            await self._z_stack(roi)
 
-    async def _expose_scan(self, roi: ROI, duration: int):
+        x_init = roi.stage.x_init
+        x_last = roi.stage.x_last
+        x_step = roi.stage.x_step * roi.stage.x_direction
+        LOGGER.debug(
+            f"Scanning {roi.name}: XStage: {x_init} to {x_last} in {x_step} increments"
+        )
+        if len(im_name) == 0:
+            im_name = roi.name
+        for i, x in enumerate(range(x_init, x_last, x_step)):
+            LOGGER.debug(f"XStage {i}/{roi.stage.nx}")
+            await self.XStage.move(x)
+            await self._z_stack(roi, f"{im_name}_x{x}")
+
+    async def _expose_scan(self, roi: ROI):
         """Async expose the sample for a specified duration without imaging."""
 
-        for i, x in enumerate(range(roi.x_init, roi.x_last, roi.x_step)):
-            LOGGER.debug(f"Exposing {roi.name} {i}/{roi.nx} at xstep={x}")
-            await self._XStage.position(x)
-            roi.x = x
-            for n in range(duration):
-                if roi.y == roi.y_init:
-                    await self._YStage.position(roi.y_last)
-                    roi.y = roi.y_last
+        x_init = roi.stage.x_init
+        x_last = roi.stage.x_last
+        x_step = roi.stage.x_step * roi.stage.x_direction
+        n_exposures = roi.expose.n_exposures
+        LOGGER.debug(
+            f"Exposing {roi.name}: XStage: {x_init} to {x_last} in {x_step} increments"
+        )
+        for i, x in enumerate(range(x_init, x_last, x_step)):
+            LOGGER.debug(f"XStage {i}/{roi.stage.nx}")
+            await self.XStage.move(x)
+            for n in range(n_exposures):
+                LOGGER.debug(f"Exposure {n}/{n_exposures}")
+                if self.YStage.position == roi.y_init:
+                    await self.YStage.move(roi.y_last)
                 else:
-                    await self._YStage.position(roi.y_init)
-                    roi.y = roi.y_init
+                    await self.YStage.move(roi.y_init)
 
     async def _find_focus(self, roi):
-        pass
+        LOGGER.debug(f"Fake finding focus using routine {roi.focus.routine}.")
+        LOGGER.debug(f"Saving focus data to {roi.focus.output}.")
+        roi.focus.z_focus = 0
 
     async def _move(self, roi: ROI):
         """Move the stage ROI x,y,z coordinates."""
-        LOGGER.debug(f"Moving {roi.name} to x={roi.x}, y={roi.y}, z={roi.z}")
-        asyncio.gather(
-            self._XStage.position(roi.x),
-            self._YStage.position(roi.y),
-            self._ZStage.position(roi.z),
+        LOGGER.debug(f"Moving to x={roi.x}, y={roi.y}, z={roi.z}")
+        await asyncio.gather(
+            self.XStage.move(roi.x),
+            self.YStage.move(roi.y),
+            self.ZStage.move(roi.z),
         )
 
     async def _set_parameters(
-        self, roi_params: ROI, mode: Literal["image", "focus", "expose"]
+        self, params: Optics, mode: Literal["image", "focus", "expose"]
     ):
         """Set the parameters to expose/image the ROI."""
 
-        params = asdict(roi_params)[mode]
+        params = params.model_dump()[mode]["optics"]
         _ = []
         for color in ["red", "green"]:
-            if mode in ["image", "focus"]:
-                _.append(self._Camera[color].exposure(params["exposure"][color]))
-            _.append(self._Laser[color].power(params["laser_power"][color]))
-            _.append(self._FilterWheel[color].filter(params["filter"][color]))
+            _.append(self.Laser[color].set_power(params["power"][color]))
+            _.append(self.FilterWheel[color].set_filter(params["filter"][color]))
+
+        if mode in ["image", "focus"]:
+            for c in self.Camera:
+                _.append(self.Camera[c].set_exposure(params["exposure"][c]))
         await asyncio.gather(*_)
 
 
@@ -507,10 +478,10 @@ class TestSequencer(BaseSequencer):
 
     def custom_roi_factory(self, name: str, **kwargs) -> ROI:
         """Take LLx, LLy, URx, URy coordinates and return an ROI with stage coordinates."""
-        LLx = kwargs.pop("LLx")
-        LLy = kwargs.pop("LLy")
-        URx = kwargs.pop("URx")
-        URy = kwargs.pop("URy")
+        LLx = kwargs.pop("LLx") * 100
+        LLy = kwargs.pop("LLy") * 100
+        URx = kwargs.pop("URx") * 100
+        URy = kwargs.pop("URy") * 100
         fc = kwargs.get("flowcell")
 
         # x, y, Steps Per UMicron

@@ -4,9 +4,6 @@ from pyseq_core.base_protocol import BaseROIFactory
 from pyseq_core.utils import DEFAULT_CONFIG  # #HW_CONFIG, deep_merge
 
 from warnings import warn
-
-# from abc import abstractmethod
-# from pydantic import ValidationError
 from typing import Union, Callable, Any, TYPE_CHECKING
 import logging
 import tomlkit
