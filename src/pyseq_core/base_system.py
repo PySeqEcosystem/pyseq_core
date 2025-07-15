@@ -137,7 +137,7 @@ class BaseSystem(ABC):
                 except Exception:
                     # Check the task status
                     task_exception = self._current_task.exception()
-                    LOGGER.debug(
+                    LOGGER.exception(
                         f"{self.name} :: Task {id} :: {description}: {task_exception}"
                     )
 
@@ -597,7 +597,7 @@ class BaseFlowCell(BaseSystem):
 
         if event == "microscope":
             async with self.condition_lock:
-                await self.condition_lock.wait_for(self.reserved_for is None)
+                await self.condition_lock.wait_for(lambda: self.reserved_for is None)
             self.reserved_for = self.name
 
     async def _user_wait(self, message, timeout=None):
@@ -844,10 +844,9 @@ class BaseSequencer(BaseSystem):
             return self.enabled_flowcells
         elif isinstance(fc, str) and len(fc) == 1:
             # fc = 'A' or 'B'
-            fc_ = [fc]
-        else:
-            # fc = 'AB' or ['A', 'B']
-            fc_ = [_.upper() for _ in fc]
+            fc = [fc]
+        # else: fc = 'AB' or ['A', 'B']
+        fc_ = [_.upper() for _ in fc]
 
         # Check user supplied flow cell names
         fcs = []
