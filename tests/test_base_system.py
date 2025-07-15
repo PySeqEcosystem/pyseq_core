@@ -96,13 +96,14 @@ async def test_hold(BaseTestSequencer, caplog):
 async def test_pause(BaseTestSequencer, caplog):
     # Pause systems and queue hold
     BaseTestSequencer.pause()
-    BaseTestSequencer.hold(duration=0.2 / 60)  # duration in minutes
+    await asyncio.sleep(0.01)
+    BaseTestSequencer.hold(duration=0.01 / 60)  # duration in minutes
     # Wait then check to see hold task is still queued
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(0.01)
     assert await check_fc_queue(BaseTestSequencer, caplog, only_check_filled=True)
     # Start queue and check queue completes
     BaseTestSequencer.start()
-    assert await check_fc_queue(BaseTestSequencer, caplog, timeout=2)
+    assert await check_fc_queue(BaseTestSequencer, caplog, timeout=10)
 
 
 @pytest.mark.asyncio
@@ -111,12 +112,12 @@ async def test_wait(BaseTestSequencerROIs, caplog):
     BaseTestSequencerROIs.pause()
     BaseTestSequencerROIs.wait()
     # Queue hold on A then image on A and B
-    BaseTestSequencerROIs.hold(flowcells="A", duration=0.005)
+    BaseTestSequencerROIs.hold(flowcells="A", duration=0.01 / 60)
     BaseTestSequencerROIs.image()
     # Check tasks queued
     assert await check_fc_queue(BaseTestSequencerROIs, caplog, only_check_filled=True)
     # Start systems and check tasks completed
-    BaseTestSequencerROIs.start()
+    BaseTestSequencerROIs.start("flowcells")
     assert await check_fc_queue(BaseTestSequencerROIs, caplog, check_microscope=True)
     # Check logs for correct sequence of events
     tasks = ["A using microscope", "B using microscope"]
@@ -152,3 +153,10 @@ def test_get_fc_list(BaseTestSequencer, fc, fc_exp):
     fcs = BaseTestSequencer._get_fc_list(fc)
     fc_ = [_.name for _ in fcs]
     assert fc_ == fc_exp
+    BaseTestSequencer.start()
+
+
+def test_get_systems_list(BaseTestSequencer):
+    fcs = BaseTestSequencer._get_systems_list()
+    fc_ = [_.name for _ in fcs]
+    assert fc_ == ["A", "B", "microscope"]

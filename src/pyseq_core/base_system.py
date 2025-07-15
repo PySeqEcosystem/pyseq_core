@@ -799,30 +799,34 @@ class BaseSequencer(BaseSystem):
         """Expose ROIs to light without imaging."""
         self.flowcells[flowcells].expose(roi)
 
-    def pause(self, queues: Union[str, List[str]] = None):
+    def pause(self, systems: Union[str, List[str]] = []):
         """Pause flow cell, microscope, or entire sequencer (default)."""
 
         # Check user supplied queues
-        queues = self._get_systems_list(queues)
-        for q in queues:
-            q.pause()
+        systems = self._get_systems_list(systems)
+        for s in systems:
+            s.pause()
 
-    def start(self, queues: Union[str, List[str]] = None):
+    def start(self, systems: Union[str, List[str]] = []):
         """Start flow cell, microscope, or entire sequencer (default)."""
 
         # Check user supplied queues
-        queues = self._get_systems_list(queues)
-        for q in queues:
-            q.start()
+        systems = self._get_systems_list(systems)
+        for s in systems:
+            s.start()
 
-    def _get_systems_list(self, systems: Union[str, List[str]] = None):
+    def _get_systems_list(self, systems: Union[str, List[str]] = []):
         """Return list of valid flow cell and microscope systems."""
 
         fc_list = self._get_fc_list()
         microscope = self._microscope
 
-        if systems is None:
+        if len(systems) == 0:
             return fc_list + [microscope]
+        elif "flowcell" in systems:
+            return self._get_fc_list()
+        elif "micro" in systems or "scope" in systems:
+            return [self.microscope]
         elif isinstance(systems, str):
             systems = [systems]
 
