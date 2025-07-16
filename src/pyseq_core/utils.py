@@ -95,7 +95,7 @@ def update_logger(logger_conf: dict, rotating: bool = False):
         del logger_conf["handlers"]["fileHandler"]
         filename = logger_conf["handlers"]["rotatingHandler"]["filename"]
         filename = Path(filename).expanduser()
-        print(filename)
+
         logger_conf["handlers"]["rotatingHandler"]["filename"] = str(filename)
     else:
         # Remove RotatingFileHandler during experiment runs
