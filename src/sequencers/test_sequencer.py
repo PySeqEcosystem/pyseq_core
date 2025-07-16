@@ -248,48 +248,8 @@ class TestMicroscope(BaseMicroscope):
         }
         return instruments
 
-    async def _initialize(self):
-        """Initialize the microscope."""
-
-        LOGGER.info(f"Initializing {self.name}")
-        # Initialize all components
-        _ = []
-        for instrument in self.instruments.values():
-            if isinstance(instrument, dict):
-                # instruments organized in nested dict
-                for nest_instrument in instrument.values():
-                    _.append(nest_instrument._initialize())
-            else:
-                _.append(instrument._initialize())
-        await asyncio._gather(*_)
-
-    async def _shutdown(self):
-        """Shutdown the microscope."""
-
-        LOGGER.info(f"Shutting down {self.name}")
-        # Shutdown all components
-        _ = []
-        for instrument in self.instruments.values():
-            if isinstance(instrument, dict):
-                # instruments organized in nested dict
-                for nest_instrument in instrument.values():
-                    _.append(nest_instrument._shutdown())
-            else:
-                _.append(instrument._shutdown())
-        await asyncio._gather(*_)
-
     async def _configure(self):
-        LOGGER.info(f"Configure down {self.name}")
-        # Configure all components
-        _ = []
-        for instrument in self.instruments.values():
-            if isinstance(instrument, dict):
-                # instruments organized in nested dict
-                for nest_instrument in instrument.values():
-                    _.append(nest_instrument._configure())
-            else:
-                _.append(instrument._configure())
-        await asyncio._gather(*_)
+        LOGGER.debug(f"Configure {self.name}")
 
     async def _capture(self, roi: ROI, im_name: str):
         """Capture an image and save it to the specified filename."""
@@ -404,37 +364,9 @@ class TestFlowCell(BaseFlowCell):
         }
         return instruments
 
-    async def _initialize(self):
-        """Initialize the flowcell."""
-
-        LOGGER.info(f"Initializing {self.name}")
-        # Initialize all components
-        _ = []
-        for instrument in self.instruments.values():
-            _.append(instrument.initialize())
-        await asyncio._gather(*_)
-
-    async def _shutdown(self):
-        """Shutdown the flowcell."""
-
-        LOGGER.info(f"Shutting down {self.name}")
-
-        # Shutdown all components
-        _ = []
-        for instrument in self.instruments.values():
-            _.append(instrument._shutdown())
-        await asyncio._gather(*_)
-
     async def _configure(self):
         """Configure the flowcell."""
-
-        LOGGER.info(f"Configure {self.name}")
-
-        # Shutdown all components
-        _ = []
-        for instrument in self.instruments.values():
-            _.append(instrument._configure())
-        await asyncio._gather(*_)
+        LOGGER.debug(f"Configure {self.name}")
 
 
 @define
@@ -452,29 +384,8 @@ class TestSequencer(BaseSequencer):
     def set_flowcells(self):
         return {fc: TestFlowCell(name=fc) for fc in ["A", "B"]}
 
-    async def _initialize(self):
-        LOGGER.info(f"Initializing {self.name}")
-        _ = []
-        for fc in self._flowcells:
-            _.append(self._flowcells[fc]._initialize())
-        _.append(self.microscope._initialize())
-        await asyncio.gather(*_)
-
-    async def _shutdown(self):
-        LOGGER.info(f"Shutting down {self.name}")
-        _ = []
-        for fc in self._flowcells:
-            _.append(self._flowcells[fc]._shutdown())
-        _.append(self.microscope._shutdown())
-        await asyncio.gather(*_)
-
     async def _configure(self):
-        LOGGER.info(f"Configuring {self.name}")
-        _ = []
-        for fc in self._flowcells:
-            _.append(self._flowcells[fc]._configure())
-        _.append(self.microscope._configure())
-        await asyncio.gather(*_)
+        LOGGER.debug(f"Configuring {self.name}")
 
     def custom_roi_factory(self, name: str, **kwargs) -> ROI:
         """Take LLx, LLy, URx, URy coordinates and return an ROI with stage coordinates."""

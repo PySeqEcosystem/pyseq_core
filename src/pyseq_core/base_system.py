@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from pyseq_core.utils import DEFAULT_CONFIG, HW_CONFIG
+from pyseq_core.utils import DEFAULT_CONFIG, HW_CONFIG, setup_experiment_path
 from pyseq_core.base_instruments import (
     BaseYStage,
     BaseXStage,
@@ -68,7 +68,7 @@ class SimpleStage(DefaultSimpleStage):
 @define(kw_only=True)
 class BaseSystem(ABC):
     name: str = field(default=None)
-    instruments: dict = field(init=False)
+    instruments: dict = field(factory=dict)
     _queue: asyncio.Queue = field(factory=asyncio.Queue)
     _queue_dict: dict = field(factory=dict)
     _worker_task: asyncio.Task = field(init=False)
@@ -120,7 +120,8 @@ class BaseSystem(ABC):
                 # Run the task in the event loop
 
                 # Start task
-                LOGGER.info(f"{self.name} :: Task {id} :: {description} started")
+
+                LOGGER.info(f"{self.name} :: Task {id} :: {description}")
                 task_name = "_".join([str(_) for _ in args])
                 self._current_task = asyncio.create_task(
                     func(*args, **kwargs), name=task_name
@@ -175,17 +176,17 @@ class BaseSystem(ABC):
     def initialize(self):
         """Initialize the system."""
         description = f"Initialize {self.name}"
-        self.add_task([description, self._initialize])
+        self.add_task(description, self._initialize)
 
     def shutdown(self):
         """Shutdown the system."""
         description = f"Shutdown {self.name}"
-        self.add_task([description, self._shutdown])
+        self.add_task(description, self._shutdown)
 
     def configure(self):
         """Configure the system."""
         description = f"Configure {self.name}"
-        self.add_task([description, self._configure])
+        self.add_task(description, self._configure)
 
     def pause(self):
         """Pause the system queue."""
@@ -222,15 +223,49 @@ class BaseSystem(ABC):
             if not self.await_task.done():
                 await_task.cancel()
 
-    @abstractmethod
     async def _initialize(self):
-        """Initialize the system."""
-        pass
+        """Configure then initialize system."""
 
-    @abstractmethod
+        LOGGER.info(f"Configuring {self.name}")
+        # Configure instruments
+        _ = []
+        for instrument in self.instruments.values():
+            if isinstance(instrument, dict):
+                # instruments organized in nested dict
+                for nest_instrument in instrument.values():
+                    _.append(nest_instrument.configure())
+            else:
+                _.append(instrument.configure())
+        await asyncio.gather(*_)
+        # Configure system
+        await self._configure()
+
+        LOGGER.info(f"Initializing {self.name}")
+        # Initialize all instruments
+        _ = []
+        for instrument in self.instruments.values():
+            if isinstance(instrument, dict):
+                # instruments organized in nested dict
+                for nest_instrument in instrument.values():
+                    _.append(nest_instrument.initialize())
+            else:
+                _.append(instrument.initialize())
+        await asyncio.gather(*_)
+
     async def _shutdown(self):
         """Shutdown the system."""
-        pass
+        LOGGER.info(f"Shutting down {self.name}")
+
+        # Shutdown all instruments
+        _ = []
+        for instrument in self.instruments.values():
+            if isinstance(instrument, dict):
+                # instruments organized in nested dict
+                for nest_instrument in instrument.values():
+                    _.append(nest_instrument.shutdown())
+            else:
+                _.append(instrument.shutdown())
+        await asyncio.gather(*_)
 
     @abstractmethod
     async def _configure(self, command):
@@ -343,12 +378,6 @@ class BaseMicroscope(BaseSystem):
 
     async def _focus(self, roi: ROI):
         """Async find focus on roi."""
-        # Don't move stage, _find_focus should move stage based on focusing routine
-        # description = f"Set focus parameters for {roi.name}"
-        # self.add_task(description, self._set_parameters, roi.focus.optics)
-        # description = f"Finding focus for {roi.name}"
-        # self.add_task(description, self._find_focus, roi)
-        # await self._queue.join()
         await self._set_parameters(roi, "focus")
         await self._find_focus(roi)
 
@@ -359,29 +388,8 @@ class BaseMicroscope(BaseSystem):
         await self._set_parameters(roi, "expose")
         await self._expose_scan(roi)
 
-        # description = f"Move to {roi.name}"
-        # self.add_task(description, self._move, roi)
-        # description = f"Set expose parameters for {roi.name}"
-        # self.add_task(description, self._set_parameters, roi.expose.optics)
-        # description = f"Expose {roi.name}"
-        # self.add_task(description, self._expose_scan, roi)
-        # await self._queue.join()
-
     async def _image(self, roi: ROI) -> None:
         """Async image ROIs."""
-
-        # description = f"Move to {roi.name}"
-        # self.add_task(description, self._move, roi)
-        # if roi.image.z_init is None:
-        #     description = f"Set focus parameters for {roi.name}"
-        #     self.add_task(description, self._set_parameters, roi.focus.optics)
-        #     description = f"Autofocusing on {roi.name}"
-        #     self.add_task(description, self._find_focus, roi)
-        # description = f"Set image parameters for {roi.name}"
-        # self.add_task(description, self._set_parameters, roi.image.optics)
-        # description = f"Scan {roi.name}"
-        # self.add_task(description, self._scan, roi)
-        # await self._queue.join()  # Wait for queue to finish
 
         await self._move(roi.stage)
         if roi.focus.z_focus == -1:
@@ -529,26 +537,6 @@ class BaseFlowCell(BaseSystem):
         return self.add_task(
             description, self.TemperatureController.set_temperature, temperature
         )
-
-    # async def _to_microscope(
-    #     self,
-    #     routine: Literal["image", "focus", "expose"],
-    #     roi: Union[ROI, List[ROI]] = [],
-    # ):
-    #     """Send ROIs to microscope to image, focus, or expose."""
-    #     if not isinstance(roi, list):
-    #         roi = [roi]
-    #     if len(roi) == 0:
-    #         roi = list(self.rois.values())
-    #     await self._roi_to_microscope(routine, roi)
-
-    # def count_roi(self, roi: Union[ROI, List[ROI]] = []):
-    #     if isinstance(roi, ROI):
-    #         nROIs = 1
-    #     else:
-    #         nROIs = len(roi)
-    #     if nROIs == 0:
-    #         nROIs = len(self.ROIs)
 
     @listerize_roi
     def image(self, roi: Union[ROI, List[ROI]] = []) -> int:
@@ -751,24 +739,6 @@ class BaseSequencer(BaseSystem):
             task_ids.append(fc.temperature(**temperature_kwargs))
         return task_ids
 
-    # def _roi_to_microscope(
-    #     self,
-    #     routine: Literal["image", "focus", "expose"],
-    #     roi: Union[ROI, List[ROI]] = [],
-    #     flowcells: Union[str, List[str]] = None,
-    # ):
-    #     if roi is None and flowcells is not None:
-    #         for fc in self._get_fc_list(flowcells):
-    #             fc._to_microscope(routine, list(fc._rois.items()))
-    #         return
-    #     elif roi is None and flowcells is None:
-    #         raise ValueError("Specify at least 1 flow cell")
-    #     else:
-    #         if not isinstance(roi, list):
-    #             roi = [roi]
-    #         for r in roi:
-    #             fc[r.stage.flowcell]._to_microscope(routine, r)
-
     @get_roi
     def image(
         self,
@@ -906,30 +876,37 @@ class BaseSequencer(BaseSystem):
 
         return len(rois)
 
-    async def new_experiment(self, fc_names: Union[str, int], exp_config_path: str):
+    def new_experiment(self, fc_names: Union[str, int], exp_config_path: str):
+        """Load new experimenet from config file for specified flowcells"""
+        # Pause flowcells
         flowcells = self._get_fc_list(fc_names)
         for fc in flowcells:
+            print(fc.name, fc._worker_task)
             if not fc._queue.empty():
                 raise RuntimeError(
                     f"Flow cell {fc.name} still running, stop flow cell before starting new experiment"
                 )
             else:
                 fc.pause()
+            print(fc.name, fc._worker_task)
+        # Load new experiment
+        description = "Load new experiment"
+        self.add_task(description, self._new_experiment, fc_names, exp_config_path)
+
+    async def _new_experiment(self, fc_names: Union[str, int], exp_config_path: str):
+        """Load new experimenet task."""
 
         # Read experiment config
         exp_config = read_user_config(exp_config_path)
+        # Set up paths for imaging, focusin, and logging and update exp_config
+        exp_config = setup_experiment_path(exp_config)
 
-        # Set up paths for imaging & focusing. Reset rois and reagents
-        image_path = Path(exp_config["experiment"].get("image_path", "."))
-        focus_path = Path(exp_config["experiment"].get("focus_path", image_path))
-        image_path.mkdir(parents=True, exist_ok=True)
-        focus_path.mkdir(parents=True, exist_ok=True)
+        # Reset rois and reagents
+        flowcells = self._get_fc_list(fc_names)
         for fc in flowcells:
             fc._exp_config = exp_config
             fc.ROIs = dict()
             fc.reagents = dict()
-            # self.microscope.image_path[fc.name] = image_path
-            # self.microscope.focus_path[fc.name] = focus_path
 
         # Add reagents from experiment config to flowcells
         for fc in flowcells:

@@ -15,8 +15,7 @@ async def test_protocol(BaseTestSequencer, tmp_path):
     # Update paths in experiment configuration
     protocol_file = "test_protocol.yaml"
     roi_file = "test_roi.toml"
-    exp_conf["experiment"]["image_path"] = str(tmp_path / "images")
-    exp_conf["experiment"]["focus_path"] = str(tmp_path / "focus")
+    exp_conf["experiment"]["output_path"] = str(tmp_path)
     exp_conf["experiment"]["protocol_path"] = str(tmp_path / protocol_file)
     exp_conf["experiment"]["roi_path"] = str(tmp_path / roi_file)
 
@@ -26,7 +25,10 @@ async def test_protocol(BaseTestSequencer, tmp_path):
     copyfile(resource_path / protocol_file, tmp_path / protocol_file)
     copyfile(resource_path / roi_file, tmp_path / roi_file)
 
-    await BaseTestSequencer.new_experiment(["A", "B"], tmp_path / exp_file)
+    BaseTestSequencer.new_experiment(["A", "B"], tmp_path / exp_file)
+    print(1, BaseTestSequencer.flowcells["A"]._worker_task)
+    await BaseTestSequencer._queue.join()
+    print(2, BaseTestSequencer.flowcells["A"]._worker_task)
 
     # Check protocol is queued
     assert len(BaseTestSequencer.flowcells["A"]._queue_dict) > 0
@@ -40,6 +42,8 @@ async def test_protocol(BaseTestSequencer, tmp_path):
     assert len(BaseTestSequencer.flowcells["A"].reagents) > 0
     assert len(BaseTestSequencer.flowcells["B"].reagents) > 0
 
+    # Clear Queue and start flowcells for clean teardown
+    print(3, BaseTestSequencer.flowcells["A"]._worker_task)
     await BaseTestSequencer.flowcells["A"].clear_queue()
     await BaseTestSequencer.flowcells["B"].clear_queue()
     await BaseTestSequencer.microscope.clear_queue()

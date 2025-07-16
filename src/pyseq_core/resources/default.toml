@@ -1,6 +1,9 @@
 [experiment]
-image_path = ""
+name = ""
+output_path = "."
+image_path = "images"
 focus_path = ""
+log_path = "logs"
 roi_path = ""
 protocol_path = ""
 

@@ -116,7 +116,7 @@ async def test_wait(BaseTestSequencerROIs, caplog):
     BaseTestSequencerROIs.image()
     # Check tasks queued
     assert await check_fc_queue(BaseTestSequencerROIs, caplog, only_check_filled=True)
-    # Start systems and check tasks completed
+    # Start flowcells and check tasks completed, microscope will start in `check_fc_queue`
     BaseTestSequencerROIs.start("flowcells")
     assert await check_fc_queue(BaseTestSequencerROIs, caplog, check_microscope=True)
     # Check logs for correct sequence of events
@@ -126,22 +126,25 @@ async def test_wait(BaseTestSequencerROIs, caplog):
 
 @pytest.mark.asyncio
 async def test_image(BaseTestSequencerROIs, caplog):
-    BaseTestSequencerROIs.microscope.pause()
+    BaseTestSequencerROIs.pause("microscope")
     BaseTestSequencerROIs.image()
+    # microscope will start in `check_fc_queue`
     assert await check_fc_queue(BaseTestSequencerROIs, caplog, check_microscope=True)
 
 
 @pytest.mark.asyncio
 async def test_focus(BaseTestSequencerROIs, caplog):
-    BaseTestSequencerROIs.microscope.pause()
+    BaseTestSequencerROIs.pause("microscope")
     BaseTestSequencerROIs.focus()
+    # microscope will start in `check_fc_queue`
     assert await check_fc_queue(BaseTestSequencerROIs, caplog, check_microscope=True)
 
 
 @pytest.mark.asyncio
 async def test_expose(BaseTestSequencerROIs, caplog):
-    BaseTestSequencerROIs.microscope.pause()
+    BaseTestSequencerROIs.pause("microscope")
     BaseTestSequencerROIs.expose()
+    # microscope will start in `check_fc_queue`
     assert await check_fc_queue(BaseTestSequencerROIs, caplog, check_microscope=True)
 
 

@@ -4,6 +4,7 @@ import yaml
 import os
 import importlib
 import logging
+import datetime
 
 LOGGER = logging.getLogger("PySeq")
 
@@ -37,8 +38,6 @@ if os.environ.get("PYTEST_VERSION") is not None and (
         all_settings = yaml.safe_load(f)  # Machine config
         machine_name = all_settings["name"]
         HW_CONFIG = all_settings[machine_name]
-
-
 else:
     # use default experiment config and machine settings from local machine
     DEFAULT_CONFIG_PATH = Path.home() / ".config/pyseq2500/default.toml"
@@ -58,3 +57,32 @@ def deep_merge(src_dict, dst_dict):
             dst_dict[k] = v
 
     return dst_dict
+
+
+def setup_experiment_path(exp_config: dict) -> dict:
+    """Set up paths for imaging & focusing."""
+
+    # Get experiment name, image path, and log path
+    exp_name = exp_config["experiment"]["name"]
+    if len(exp_name) == 0:
+        exp_name = "PySeq_" + datetime.now().strftime("%Y%m%d")
+    output_path = Path(exp_config["experiment"]["output_path"]) / exp_name
+    image_path = output_path / exp_config["experiment"]["image_path"]
+    log_path = output_path / exp_config["experiment"]["log_path"]
+    # Allow custom focus path with default = output_path / focus
+    focus_path = exp_config["experiment"]["focus_path"]
+    if len(focus_path) == 0:
+        focus_path = output_path / "focus"
+    else:
+        focus_path = Path(focus_path)
+    # Make paths
+    image_path.mkdir(parents=True, exist_ok=True)
+    focus_path.mkdir(parents=True, exist_ok=True)
+    log_path.mkdir(parents=True, exist_ok=True)
+    # Update config file
+    exp_config["experiment"]["name"] = exp_name
+    exp_config["experiment"]["image_path"] = str(image_path)
+    exp_config["experiment"]["focus_path"] = str(focus_path)
+    exp_config["experiment"]["log_path"] = str(log_path)
+
+    return exp_config
