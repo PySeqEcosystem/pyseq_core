@@ -2,6 +2,7 @@ import pytest
 import importlib
 from shutil import copyfile
 import tomlkit
+from pathlib import Path
 
 
 @pytest.mark.asyncio
@@ -12,6 +13,7 @@ async def test_protocol(BaseTestSequencer, tmp_path):
     exp_path = resource_path / "test_experiment.toml"
     exp_conf = tomlkit.parse(open(exp_path).read())
     exp_name = exp_conf["experiment"]["name"]
+    exp_conf["ROTATE_LOGS"] = True
 
     # Update paths in experiment configuration
     protocol_file = "test_protocol.yaml"
@@ -34,7 +36,7 @@ async def test_protocol(BaseTestSequencer, tmp_path):
     paths = ["images", "focus", "log"]
     for p in paths:
         assert (tmp_path / exp_name / p).exists()
-    assert (tmp_path / exp_name / p / f"{exp_name}.log").exists()
+    assert Path("~/.config/pyseq2500/pyseq.log").exists()
 
     # Check protocol is queued
     assert len(BaseTestSequencer.flowcells["A"]._queue_dict) > 0

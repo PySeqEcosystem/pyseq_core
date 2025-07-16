@@ -1,7 +1,7 @@
 [experiment]
-name = ""
-output_path = "."
-images_path = ""
+name = ""                                                                       # Name of experiment
+output_path = "."                                                               # Base output directory, default=current working directory
+images_path = ""                                                                # Image directory, default = output_path/images
 focus_path = ""
 log_path = ""
 roi_path = ""
@@ -72,9 +72,11 @@ filename = ""
 
 [logging.loggers.PySeq]
 level = "DEBUG"
-handlers = ["consoleHandler"]
+handlers = []
 propagate = false
 
 [logging.root]
 level = "WARNING"
 handlers = ["consoleHandler"]
+
+ROTATE_LOGS = false                                                             # flag to rotate logs during testing or idleing

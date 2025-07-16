@@ -5,6 +5,7 @@ import os
 import importlib
 import logging
 import logging.config  # Need to import, or I get an AttributeError?
+import logging.handlers
 import datetime
 
 LOGGER = logging.getLogger("PySeq")
@@ -92,10 +93,14 @@ def update_logger(logger_conf: dict, rotating: bool = False):
     if rotating:
         # Remove FileHandler if running tests or idleing
         del logger_conf["handlers"]["fileHandler"]
-        logger_conf["loggers"]["PySeq"]["handlers"].append("rotatingHandler")
+        filename = logger_conf["handlers"]["rotatingHandler"]["filename"]
+        filename = Path(filename).expanduser()
+        print(filename)
+        logger_conf["handlers"]["rotatingHandler"]["filename"] = str(filename)
     else:
         # Remove RotatingFileHandler during experiment runs
         del logger_conf["handlers"]["rotatingHandler"]
-        logger_conf["loggers"]["PySeq"]["handlers"].append("fileHandler")
+
+    logger_conf["loggers"]["PySeq"]["handlers"] = list(logger_conf["handlers"].keys())
     # Need to import logging.config ?
     logging.config.dictConfig(logger_conf)

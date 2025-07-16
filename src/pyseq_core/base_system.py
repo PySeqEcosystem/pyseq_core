@@ -906,7 +906,7 @@ class BaseSequencer(BaseSystem):
         exp_config = read_user_config(exp_config_path)
         # Set up paths for imaging, focusin, and logging and update exp_config
         exp_config = setup_experiment_path(exp_config, exp_name)
-        update_logger(exp_config["logging"])
+        update_logger(exp_config["logging"], exp_config["ROTATE_LOGS"])
 
         # Reset rois and reagents
         flowcells = self._get_fc_list(fc_names)
