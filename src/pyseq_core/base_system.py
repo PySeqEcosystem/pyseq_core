@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from pyseq_core.utils import DEFAULT_CONFIG, HW_CONFIG
+from pyseq_core.utils import DEFAULT_CONFIG, HW_CONFIG, setup_experiment_path
 from pyseq_core.base_instruments import (
     BaseYStage,
     BaseXStage,
@@ -36,7 +36,7 @@ from pyseq_core.reservation_system import ReservationSystem, reserve_microscope
 from pyseq_core.roi_manager import ROIManager, read_roi_config
 from typing import Dict, Union, List, Coroutine, Literal
 from attrs import define, field
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 from pathlib import Path
 import asyncio
 import logging
@@ -68,7 +68,7 @@ class SimpleStage(DefaultSimpleStage):
 @define(kw_only=True)
 class BaseSystem(ABC):
     name: str = field(default=None)
-    instruments: dict = field(init=False)
+    instruments: dict = field(factory=dict)
     _queue: asyncio.Queue = field(factory=asyncio.Queue)
     _queue_dict: dict = field(factory=dict)
     _worker_task: asyncio.Task = field(init=False)
@@ -103,6 +103,7 @@ class BaseSystem(ABC):
 
         while not self._loop_stop:
             # Wait if queue is paused
+
             await self._pause_event.wait()
 
             # Get task
@@ -119,7 +120,8 @@ class BaseSystem(ABC):
                 # Run the task in the event loop
 
                 # Start task
-                LOGGER.debug(f"{self.name} :: Task {id} :: {description} started")
+
+                LOGGER.info(f"{self.name} :: Task {id} :: {description}")
                 task_name = "_".join([str(_) for _ in args])
                 self._current_task = asyncio.create_task(
                     func(*args, **kwargs), name=task_name
@@ -136,7 +138,7 @@ class BaseSystem(ABC):
                 except Exception:
                     # Check the task status
                     task_exception = self._current_task.exception()
-                    LOGGER.error(
+                    LOGGER.exception(
                         f"{self.name} :: Task {id} :: {description}: {task_exception}"
                     )
 
@@ -174,17 +176,17 @@ class BaseSystem(ABC):
     def initialize(self):
         """Initialize the system."""
         description = f"Initialize {self.name}"
-        self.add_task([description, self._initialize])
+        self.add_task(description, self._initialize)
 
     def shutdown(self):
         """Shutdown the system."""
         description = f"Shutdown {self.name}"
-        self.add_task([description, self._shutdown])
+        self.add_task(description, self._shutdown)
 
     def configure(self):
         """Configure the system."""
         description = f"Configure {self.name}"
-        self.add_task([description, self._configure])
+        self.add_task(description, self._configure)
 
     def pause(self):
         """Pause the system queue."""
@@ -198,15 +200,15 @@ class BaseSystem(ABC):
 
     @property
     def condition_lock(self):
-        return self.reservation_system.condition_lock
+        return self._reservation_system.condition_lock
 
     @property
     def reserved_for(self):
-        return self.reservation_system.reserved_for
+        return self._reservation_system.reserved_for
 
     @reserved_for.setter
     def reserved_for(self, flowcell: Union[str, None]):
-        self.reservation_system.reserved_for = flowcell
+        self._reservation_system.reserved_for = flowcell
 
     async def _check_pause_and_cancel(
         self, await_task: asyncio.Task, check_cancel: bool = True
@@ -221,15 +223,49 @@ class BaseSystem(ABC):
             if not self.await_task.done():
                 await_task.cancel()
 
-    @abstractmethod
     async def _initialize(self):
-        """Initialize the system."""
-        pass
+        """Configure then initialize system."""
 
-    @abstractmethod
+        LOGGER.info(f"Configuring {self.name}")
+        # Configure instruments
+        _ = []
+        for instrument in self.instruments.values():
+            if isinstance(instrument, dict):
+                # instruments organized in nested dict
+                for nest_instrument in instrument.values():
+                    _.append(nest_instrument.configure())
+            else:
+                _.append(instrument.configure())
+        await asyncio.gather(*_)
+        # Configure system
+        await self._configure()
+
+        LOGGER.info(f"Initializing {self.name}")
+        # Initialize all instruments
+        _ = []
+        for instrument in self.instruments.values():
+            if isinstance(instrument, dict):
+                # instruments organized in nested dict
+                for nest_instrument in instrument.values():
+                    _.append(nest_instrument.initialize())
+            else:
+                _.append(instrument.initialize())
+        await asyncio.gather(*_)
+
     async def _shutdown(self):
         """Shutdown the system."""
-        pass
+        LOGGER.info(f"Shutting down {self.name}")
+
+        # Shutdown all instruments
+        _ = []
+        for instrument in self.instruments.values():
+            if isinstance(instrument, dict):
+                # instruments organized in nested dict
+                for nest_instrument in instrument.values():
+                    _.append(nest_instrument.shutdown())
+            else:
+                _.append(instrument.shutdown())
+        await asyncio.gather(*_)
 
     @abstractmethod
     async def _configure(self, command):
@@ -305,7 +341,7 @@ class BaseMicroscope(BaseSystem):
         pass
 
     @abstractmethod
-    async def _expose_scan(self, roi: ROI):
+    async def _expose_scan(self, roi: ROI, duration: Union[float, int]):
         """Scan over the specified region of interest (ROI) with laser."""
         pass
 
@@ -315,7 +351,9 @@ class BaseMicroscope(BaseSystem):
         pass
 
     @abstractmethod
-    async def _set_parameters(self, image_params: Optics):
+    async def _set_parameters(
+        self, image_params: Optics, mode: Literal["image", "focus", "expose"]
+    ):
         """Async set the parameters for the ROI."""
         pass
 
@@ -325,114 +363,76 @@ class BaseMicroscope(BaseSystem):
         # Reset stage to initial position after finding focus
         pass
 
-    # def validate_stage(self, roi:ROI):
-    #     """Validate stage positions parameters"""
-
-    #     errors = []
-    #     stage = roi.stage.model_dump()
-
-    #     # Validate XYZ stage positions
-    #     for s in ['XStage', 'YStage', 'ZStage']:
-    #         for pos in ['init', 'last']:
-    #             d = s[0].lower()
-    #             try:
-    #                 self.instruments[s](stage[f'{d}_{pos}'])
-    #             except ValueError as e:
-    #                 LOGGER.error(e)
-    #                 errors.append(e)
-
-    #     #Validate extra stage position beyond x,y,z
-    #     errors = self.validate_extra_stage(roi, errors)
-
-    #     n_errors = len(errors)
-    #     if n_errors > 0:
-    #         raise ValueError(f'Found {n_errors} stage errors for {roi.name}')
-
-    # def validate_optics(self, optics: Optics):
-    #     ('FilterWheel', 'filter'), []
-    #     self.FilterWheel(optics.filter)
-    #     self.Laser(optics.laser)
-    #     self.Camera(optics.exposure)
-
-    # @abstractmethod
-    # def validate_extra_stage(self, roi: ROI, errors) -> list:
-    #     pass
-
-    # Reset stage to initial position after finding focus
-    # pass
-
     @reserve_microscope
     async def _from_flowcell(
-        self, routine: Literal["image", "focus", "expose"], roi: List[BaseModel]
+        self, routine: Literal["image", "focus", "expose"], roi: List[ROI]
     ):
         for r in roi:
-            if routine in "imaging":
-                await self._image(r)
+            if routine in "image":
+                self.image(r)
             elif routine in "focus":
-                await self._focus(r)
+                self.focus(r)
             elif routine in "expose":
-                await self._expose(r)
+                self.expose(r)
+        await self._queue.join()
 
     async def _focus(self, roi: ROI):
         """Async find focus on roi."""
-        # Don't move stage, _find_focus should move stage based on focusing routine
-        description = f"Set focus parameters for {roi.name}"
-        self.add_task(description, self._set_parameters, roi.focus.optics)
-        description = f"Finding focus for {roi.name}"
-        self.add_task(description, self._find_focus, roi)
-        await self._queue.join()
+        await self._set_parameters(roi, "focus")
+        await self._find_focus(roi)
 
     async def _expose(self, roi: ROI):
         """Async expose the sample for a specified duration without imaging."""
 
-        description = f"Move to {roi.name}"
-        self.add_task(description, self._move, roi)
-        description = f"Set expose parameters for {roi.name}"
-        self.add_task(description, self._set_parameters, roi.expose.optics)
-        description = f"Expose {roi.name}"
-        self.add_task(description, self._expose_scan, roi)
-        await self._queue.join()
+        await self._move(roi.stage)
+        await self._set_parameters(roi, "expose")
+        await self._expose_scan(roi)
 
     async def _image(self, roi: ROI) -> None:
         """Async image ROIs."""
 
-        description = f"Move to {roi.name}"
-        self.add_task(description, self._move, roi)
-        if roi.image.z_init is None:
-            description = f"Set focus parameters for {roi.name}"
-            self.add_task(description, self._set_parameters, roi.focus.optics)
-            description = f"Autofocusing on {roi.name}"
-            self.add_task(description, self._find_focus, roi)
-        description = f"Set image parameters for {roi.name}"
-        self.add_task(description, self._set_parameters, roi.image.optics)
-        description = f"Scan {roi.name}"
-        self.add_task(description, self._scan, roi)
-        await self._queue.join()  # Wait for queue to finish
-
-    def move(self, stage: SimpleStage) -> None:
-        """Move the stage ROI x,y,z coordinates."""
-        description = f"Move x:{stage.x}, y:{stage.y}, z:{stage.z}"
-        self.add_task(description, self._move, SimpleStage)
+        await self._move(roi.stage)
+        if roi.focus.z_focus == -1:
+            await self._set_parameters(roi, "focus")
+            await self._find_focus(roi)
+        await self._set_parameters(roi, "image")
+        await self._scan(roi)
 
     def image(self, roi: ROI) -> None:
         """Acquire image from the specified region of interest (ROI)."""
-        description = f"Scan {roi.name})"
-        self.add_task(description, self._scan, roi)
+        description = f"Image {roi.name}"
+        return self.add_task(description, self._image, roi)
 
     def expose(self, roi: ROI) -> None:
         """Expose the sample to light without imaging."""
         description = f"Expose {roi.name}"
-        self.add_task(description, self._scan, roi)
+        return self.add_task(description, self._expose, roi)
 
     def focus(self, roi: ROI) -> None:
         """Autofocus on ROI."""
         description = f"Focusing on {roi.name}"
-        self.add_task(description, self._find_focus, roi)
+        return self.add_task(description, self._focus, roi)
 
-    def set_parameters(self, roi_params: Optics, mode) -> None:
+    def move(self, stage: SimpleStage) -> None:
+        """Move the stage ROI x,y,z coordinates."""
+        description = f"Move x:{stage.x}, y:{stage.y}, z:{stage.z}"
+        return self.add_task(description, self._move, SimpleStage)
+
+    def set_parameters(self, roi_params: Optics) -> None:
         """Set the laser power, filters, exposure, imaging mode, etc. for a specified region of interest (ROI)."""
         description = "Setting parameters"
-        self.add_task(description, self._set_parameters, roi_params)
+        return self.add_task(description, self._set_parameters, roi_params)
+
+
+def listerize_roi(func):
+    def wrap(self, roi: Union[ROI, List[ROI]] = []):
+        if not isinstance(roi, list):
+            roi = [roi]
+        if len(roi) == 0:
+            roi = list(self.ROIs.values())
+        return func(self, roi)
+
+    return wrap
 
 
 @define(kw_only=True)
@@ -462,15 +462,16 @@ class BaseFlowCell(BaseSystem):
         """Select a port on the valve."""
 
         if isinstance(reagent, str):
-            port = self.reagents[reagent]["port"]
+            if reagent in self.reagents:
+                port = self.reagents[reagent]["port"]
+            else:
+                return False
         elif isinstance(reagent, int):
             port = reagent
 
-        if self.Valve(port):
-            description = f"Select {reagent} at port {port}."
-            self.add_task(description, self._select_port, port)
-            return True
-        return False
+        description = f"Select {reagent} at port {port}."
+        self.add_task(description, self.Valve.select, port)
+        return True
 
     def pump(
         self,
@@ -486,17 +487,17 @@ class BaseFlowCell(BaseSystem):
             if not self.select_port(reagent):
                 raise KeyError(f"{reagent} is invalid for Valve {self.name}")
 
-        if flow_rate is None:
+        # default flow_rate = 0
+        if not flow_rate:
             flow_rate = self.reagents[reagent].get("flow_rate")
 
-        if self.Pump(volume, flow_rate):
-            if not reverse:
-                description = f"Pump {volume} uL at {flow_rate} uL/min."
-                return self.add_task(
-                    description, self._pump, volume, flow_rate, **kwargs
-                )
-            else:
-                return self.reverse_pump(volume, flow_rate, **kwargs)
+        if not reverse:
+            description = f"Pump {volume} uL at {flow_rate} uL/min."
+            return self.add_task(
+                description, self.Pump.pump, volume, flow_rate, **kwargs
+            )
+        else:
+            return self.reverse_pump(volume, flow_rate, **kwargs)
 
     def reverse_pump(
         self,
@@ -512,13 +513,12 @@ class BaseFlowCell(BaseSystem):
 
         description = f"Reverse pump {volume} uL at {flow_rate} uL/min."
         return self.add_task(
-            description, self._reverse_pump, volume, flow_rate, **kwargs
+            description, self.Pump.reverse_pump, volume, flow_rate, **kwargs
         )
 
-    def hold(self, duration: Union[int, float]) -> int:
+    def hold(self, duration: Union[int, float]) -> None:
         """Hold for specified duration (minutes)."""
         description = f"Hold for {duration} minutes."
-        # self.add_task(description, asyncio.sleep, duration*60)
         return self.add_task(description, self._hold, duration)
 
     def wait(self, event: str) -> int:
@@ -526,53 +526,35 @@ class BaseFlowCell(BaseSystem):
         description = f"Wait for {event}."
         return self.add_task(description, self._wait, event)
 
-    def user(self, message: str, timeout: Union[int, float]) -> int:
+    def user(self, message: str, timeout: Union[int, float]) -> None:
         """Send message to the user and wait for a response."""
         description = "Wait for user response"
         return self.add_task(description, self._user_wait, message)
 
-    def temperature(self, temperature: Union[int, float]) -> int:
+    def temperature(self, temperature: Union[int, float]) -> None:
         """Set the temperature of the flow cell."""
-        description = "Set temperature to {temperature}"
-        return self.add_task(description, self._temperature, temperature)
+        description = f"Set temperature to {temperature} C"
+        return self.add_task(
+            description, self.TemperatureController.set_temperature, temperature
+        )
 
-    async def _to_microscope(
-        self,
-        routine: Literal["image", "focus", "expose"],
-        roi: Union[ROI, List[ROI]] = [],
-    ):
-        """Send ROIs to microscope to image, focus, or expose."""
-        if not isinstance(roi, list):
-            roi = [roi]
-        if len(roi) == 0:
-            roi = list(self.rois.values())
-        await self._roi_to_microscope(routine, roi)
-
-    def count_roi(self, roi: Union[ROI, List[ROI]] = []):
-        if isinstance(roi, ROI):
-            nROIs = 1
-        else:
-            nROIs = len(roi)
-        if nROIs == 0:
-            nROIs = len(self.ROIs)
-
+    @listerize_roi
     def image(self, roi: Union[ROI, List[ROI]] = []) -> int:
         """Image specified ROIs or all ROIs on flowcell (default)."""
-        nROIs = self.count_roi(roi)
-        description = f"Image {nROIs} ROIs"
-        return self.add_task(description, self._to_microscope, "image", roi)
+        description = f"Image {len(roi)} ROIs"
+        self.add_task(description, self._roi_to_microscope, "image", roi)
 
+    @listerize_roi
     def focus(self, roi: Union[ROI, List[ROI]] = []) -> int:
         """Focus on specified ROIs or all ROIs on flowcell (default)."""
-        nROIs = self.count_roi(roi)
-        description = f"Focus on {nROIs} ROIs"
-        return self.add_task(description, self._to_microscope, "image", roi)
+        description = f"Focus on {len(roi)} ROIs"
+        self.add_task(description, self._roi_to_microscope, "focus", roi)
 
+    @listerize_roi
     def expose(self, roi: Union[ROI, List[ROI]] = []) -> int:
         """Expose specified ROIs or all ROIs on flowcell (default)."""
-        nROIs = self.count_roi(roi)
-        description = f"Expose {nROIs} ROIs"
-        return self.add_task(description, self._to_microscope, "image", roi)
+        description = f"Expose {len(roi)} ROIs"
+        self.add_task(description, self._roi_to_microscope, "expose", roi)
 
     def update_protocol_name(self, name: str):
         description = f"Notify user of new protocol {name}"
@@ -603,32 +585,44 @@ class BaseFlowCell(BaseSystem):
 
         if event == "microscope":
             async with self.condition_lock:
-                await self.condition_lock.wait_for(self.reserved_for is None)
-            self.reserved_for(self.name)
+                await self.condition_lock.wait_for(lambda: self.reserved_for is None)
+            self.reserved_for = self.name
 
     async def _user_wait(self, message, timeout=None):
         """Async send message to the user and wait for a response."""
 
         await asyncio.wait_for(asyncio.to_thread(input, message), timeout)
 
-    @abstractmethod
-    async def _temperature(self, temperature):
-        """Set the temperature of the flow cell."""
-        pass
 
-    @abstractmethod
-    async def _select_port(self, port):
-        pass
+def get_roi(func):
+    def wrap(
+        self,
+        roi: Union[ROI, List[ROI]] = [],
+        flowcells: Union[str, List[str]] = None,
+        **kwargs,
+    ):
+        if isinstance(roi, list) and len(roi) == 0 and len(kwargs) == 0:
+            # image/expose/focus ROIs listed on flowcells
+            for fc in self._get_fc_list(flowcells):
+                func(self, roi, fc.name)
+            return
+        elif not isinstance(roi, list) and len(kwargs) == 0:
+            # put single ROI in list
+            roi = [roi]
+        elif len(kwargs) > 0:
+            # put single ROI specified by kwargs into list
+            roi = [ROI(**kwargs)]
 
-    @abstractmethod
-    async def _pump(self, volume, flow_rate, **kwargs):
-        """Async pump a specified volume of a reagant at a specified flow rate."""
-        pass
+        # split ROIs into lists for specific flowcells
+        _rois = {}
+        for r in roi:
+            _rois.set_default(r.stage.flowcell, [])
+            _rois[r.stage.flowcell].append(r)
+        # image/expose/focus ROIs in list
+        for fc, fc_rois in _rois.items():
+            func(self, fc_rois, fc)
 
-    @abstractmethod
-    async def _reverse_pump(self, volume, flow_rate, **kwargs):
-        """Async pump a specified volume of a reagant at a specified flow rate."""
-        pass
+    return wrap
 
 
 @define
@@ -637,6 +631,7 @@ class BaseSequencer(BaseSystem):
     _flowcells: dict[Union[str, int], BaseFlowCell] = field(init=False)
     _reagents_manager: ReagentsManager = field(init=False)
     _roi_manager: ROIManager = field(init=False)
+    _enable: dict = field(factory=dict)
 
     @property
     def microscope(self) -> BaseMicroscope:
@@ -661,16 +656,18 @@ class BaseSequencer(BaseSystem):
         # Add ROI manager
         self._roi_manager = ROIManager(self._flowcells)
 
-        # Connect microscope to flow cells
+        # Connect microscope to flow cells and enable flowcells
         for fc in self._flowcells.keys():
             self._flowcells[fc]._roi_to_microscope = self._microscope._from_flowcell
             self._flowcells[fc]._reservation_system = rez_sys
+            self._enable[fc] = True
 
         self._pause_event.set()
 
     @abstractmethod
     @_flowcells.default
     def set_flowcells(self):
+        # return {fc: TestFlowCell(name=fc) for fc in ["A", "B"]}
         pass
 
     def pump(
@@ -682,11 +679,15 @@ class BaseSequencer(BaseSystem):
         """Pump volume in uL from/to specified port at flow rate in ul/min on specified flow cell."""
         fc_ = self._get_fc_list(flowcells)
 
+        task_ids = []
         for fc in fc_:
             if pump_command is None:
-                kwargs.update({"flowcell": fc})
+                kwargs.update({"flowcell": fc.name})
                 pump_command = PumpCommand(**kwargs)
-            self._flowcells[fc].pump(**pump_command.model_dump())
+            pump_kwargs = pump_command.model_dump()
+            del pump_kwargs["flowcell"]
+            task_ids.append(fc.pump(**pump_kwargs))
+        return task_ids
 
     def hold(
         self,
@@ -701,7 +702,7 @@ class BaseSequencer(BaseSystem):
         fc_ = self._get_fc_list(flowcells)
         task_ids = []
         for fc in fc_:
-            task_ids.append(self._flowcells[fc].hold(hold_command.duration))
+            task_ids.append(fc.hold(hold_command.duration))
         return task_ids
 
     def wait(
@@ -717,37 +718,28 @@ class BaseSequencer(BaseSystem):
         fc_ = self._get_fc_list(flowcells)
         task_ids = []
         for fc in fc_:
-            task_ids.append(self._flowcells[fc].wait(wait_command.event))
+            task_ids.append(fc.wait(wait_command.event))
         return task_ids
 
-    def temperature(self, temperature_command: TemperatureCommand = None, **kwargs):
-        """Hold specified flow cell for specified duration in minutes, used for incubations."""
-
-        if temperature_command is None:
-            temperature_command = TemperatureCommand(**kwargs)
-        fc_ = self._get_fc_list(temperature_command.flowcell)
-        for fc in fc_:
-            self._flowcells[fc].temperature(temperature_command.temperature)
-
-    def _roi_to_microscope(
+    def temperature(
         self,
-        routine: Literal["image", "focus", "expose"],
-        roi: Union[ROI, List[ROI]] = [],
-        flowcells: Union[str, List[str]] = None,
+        flowcells: Union[str, int] = None,
+        temperature_command: TemperatureCommand = None,
+        **kwargs,
     ):
-        if roi is None and flowcells is not None:
-            for fc in self._get_fc_list(flowcells):
-                _fc = self._flowcells[fc]
-                _fc._to_microscope(routine, list(_fc._rois.items()))
-            return
-        elif roi is None and flowcells is None:
-            raise ValueError("Specify at least 1 flow cell")
-        else:
-            if not isinstance(roi, list):
-                roi = [roi]
-            for r in roi:
-                self._flowcells[r.stage.flowcell]._to_microscope(routine, r)
+        """Hold specified flow cell for specified duration in minutes, used for incubations."""
+        fc_ = self._get_fc_list(flowcells)
+        task_ids = []
+        for fc in fc_:
+            if temperature_command is None:
+                kwargs.update({"flowcell": fc.name})
+                temperature_command = TemperatureCommand(**kwargs)
+            temperature_kwargs = temperature_command.model_dump()
+            del temperature_kwargs["flowcell"]
+            task_ids.append(fc.temperature(**temperature_kwargs))
+        return task_ids
 
+    @get_roi
     def image(
         self,
         roi: Union[ROI, List[ROI]] = [],
@@ -755,60 +747,64 @@ class BaseSequencer(BaseSystem):
         **kwargs,
     ):
         """Image ROIs."""
+        self.flowcells[flowcells].image(roi)
 
-        if len(roi) == 0 and flowcells is None:
-            roi = [ROI(**kwargs)]
-        self._roi_to_microscope("image", roi, flowcells)
-
+    @get_roi
     def focus(
-        self, roi: Union[ROI, List[ROI]], flowcells: Union[str, List[str]] = None
+        self,
+        roi: Union[ROI, List[ROI]] = [],
+        flowcells: Union[str, List[str]] = None,
+        **kwargs,
     ):
         """Find focus z position in ROIs."""
-        self._roi_to_microscope("focus", roi, flowcells)
+        self.flowcells[flowcells].focus(roi)
 
+    @get_roi
     def expose(
         self,
-        roi: Union[ROI, List[ROI]],
+        roi: Union[ROI, List[ROI]] = [],
         flowcells: Union[str, List[str]] = None,
         **kwargs,
     ):
         """Expose ROIs to light without imaging."""
-        if len(roi) == 0 and flowcells is None:
-            roi = [ROI(**kwargs)]
-        self._roi_to_microscope("expose", roi, flowcells)
+        self.flowcells[flowcells].expose(roi)
 
-    def pause(self, queues: Union[str, List[str]] = None):
+    def pause(self, systems: Union[str, List[str]] = []):
         """Pause flow cell, microscope, or entire sequencer (default)."""
 
         # Check user supplied queues
-        queues = self._get_systems_list(queues)
-        for q in queues:
-            q.pause()
+        systems = self._get_systems_list(systems)
+        for s in systems:
+            s.pause()
 
-    def start(self, queues: Union[str, List[str]] = None):
+    def start(self, systems: Union[str, List[str]] = []):
         """Start flow cell, microscope, or entire sequencer (default)."""
 
         # Check user supplied queues
-        queues = self._get_systems_list(queues)
-        for q in queues:
-            q.start()
+        systems = self._get_systems_list(systems)
+        for s in systems:
+            s.start()
 
-    def _get_systems_list(self, systems: Union[str, List[str]] = None):
+    def _get_systems_list(self, systems: Union[str, List[str]] = []):
         """Return list of valid flow cell and microscope systems."""
 
         fc_list = self._get_fc_list()
-        microscope = self._microscope.name
+        microscope = self._microscope
 
-        if systems is None:
-            systems = fc_list + [microscope]
+        if len(systems) == 0:
+            return fc_list + [microscope]
+        elif "flowcell" in systems:
+            return self._get_fc_list()
+        elif "micro" in systems or "scope" in systems:
+            return [self.microscope]
         elif isinstance(systems, str):
             systems = [systems]
 
         systems_ = []
         for i in systems:
-            if i in fc_list:
+            if i in self.enable:
                 systems_.append(self.flowcells[i])
-            elif i in microscope:
+            elif i == microscope.name:
                 systems_.append(self.microscope)
             else:
                 raise ValueError(f"{i} is not a valid flow cell or microscope.")
@@ -818,41 +814,25 @@ class BaseSequencer(BaseSystem):
     def _get_fc_list(self, fc: Union[str, list] = None):
         """Return list of valid flowcells."""
 
-        valid_fc = list(self._flowcells.keys())
         if fc is None:
-            fc_ = valid_fc
-            return list(fc_)
+            return self.enabled_flowcells
         elif isinstance(fc, str) and len(fc) == 1:
-            fc_ = [fc]
+            # fc = 'A' or 'B'
+            fc = [fc]
+        # else: fc = 'AB' or ['A', 'B']
         fc_ = [_.upper() for _ in fc]
 
         # Check user supplied flow cell names
+        fcs = []
         for fc in fc_:
-            if fc not in valid_fc:
+            if fc not in self._flowcells:
                 raise ValueError(f"{fc} is not a valid flow cell.")
+            elif not self._flowcells[fc].enabled:
+                raise ValueError(f"Flow cell {fc} is disabled.")
+            else:
+                fcs.append(self._flowcells[fc])
 
-        return fc_
-
-    def _enable(self, fc_dict: Dict[str, bool], *args: str):
-        """Enable specified flowcells."""
-        if len(fc_dict) == 0 and len(args) > 0:
-            for fc in args:
-                fc = fc.upper()
-                if fc not in self._flowcells:
-                    LOGGER.warning(f"Flowcell {fc} not found in sequencer")
-                else:
-                    fc_dict[fc] = True
-
-    def disable(self, fc_dict: Dict[str, bool], *args: str):
-        """Disable specified flowcells"""
-        if len(fc_dict) == 0 and len(args) > 0:
-            for fc in args:
-                fc = fc.upper()
-                if fc.upper() not in self._flowcells:
-                    LOGGER.warning(f"Flowcell {fc} not found in sequencer")
-                else:
-                    fc_dict[fc.upper()] = False
-        self.enable(fc_dict)
+        return fcs
 
     @property
     def enable(self):
@@ -860,25 +840,27 @@ class BaseSequencer(BaseSystem):
         return self._enable
 
     @enable.setter
-    def enable(self, flowcells: str):
-        """Enable specified flowcells."""
-        self._enable = {fc.upper(): True for fc in self._get_fc_list(flowcells)}
+    def enable(self, flowcells: Union[str, list]):
+        """Toggle flowcells to be enabled/disabled"""
+        for fc in self._get_fc_list(flowcells):
+            status = not self._flowcells[fc]
+            self._flowcells[fc].enabled = status
+            self._enable[fc] = status
 
     @property
-    def enabled(self):
-        """Get the enabled status of the flowcell."""
+    def enabled_flowcells(self):
+        """Get the list of only enabled flowcells."""
+        return [fc for fc in self._flowcells.values() if fc.enabled]
 
-        return [fc for fc in self._flowcells if self._flowcells[fc].enable]
-
-    def add_rois(self, flowcells, roi_path: str) -> int:
-        flowcells = self._get_fc_list(flowcells)
+    def add_rois(self, fc_names: str, roi_path: str) -> int:
+        flowcells = self._get_fc_list(fc_names)
 
         # Read roi file and get list of validated ROIs
         try:
             rois = read_roi_config(
-                flowcells,
+                fc_names,
                 roi_path,
-                self.flowcells[flowcells[0]]._exp_config,
+                flowcells[0]._exp_config,
                 self.custom_roi_factory,
             )
         except ValidationError as e:
@@ -894,40 +876,47 @@ class BaseSequencer(BaseSystem):
 
         return len(rois)
 
-    async def new_experiment(self, flowcells: str, exp_config_path: str):
-        flowcells = self._get_fc_list(flowcells)
+    def new_experiment(self, fc_names: Union[str, int], exp_config_path: str):
+        """Load new experimenet from config file for specified flowcells"""
+        # Pause flowcells
+        flowcells = self._get_fc_list(fc_names)
         for fc in flowcells:
-            if not self.flowcells[fc]._queue.empty():
+            print(fc.name, fc._worker_task)
+            if not fc._queue.empty():
                 raise RuntimeError(
                     f"Flow cell {fc.name} still running, stop flow cell before starting new experiment"
                 )
             else:
-                self.flowcells[fc].pause()
+                fc.pause()
+            print(fc.name, fc._worker_task)
+        # Load new experiment
+        description = "Load new experiment"
+        self.add_task(description, self._new_experiment, fc_names, exp_config_path)
+
+    async def _new_experiment(self, fc_names: Union[str, int], exp_config_path: str):
+        """Load new experimenet task."""
 
         # Read experiment config
         exp_config = read_user_config(exp_config_path)
+        # Set up paths for imaging, focusin, and logging and update exp_config
+        exp_config = setup_experiment_path(exp_config)
 
-        # Set up paths for imaging & focusing. Reset rois and reagents
-        image_path = Path(exp_config["experiment"].get("image_path", "."))
-        focus_path = Path(exp_config["experiment"].get("focus_path", image_path))
-        image_path.mkdir(parents=True, exist_ok=True)
-        focus_path.mkdir(parents=True, exist_ok=True)
+        # Reset rois and reagents
+        flowcells = self._get_fc_list(fc_names)
         for fc in flowcells:
-            self.flowcells[fc]._exp_config = exp_config
-            self.flowcells[fc].ROIs = dict()
-            self.flowcells[fc].reagents = dict()
-            self.microscope.image_path[fc] = image_path
-            self.microscope.focus_path[fc] = focus_path
+            fc._exp_config = exp_config
+            fc.ROIs = dict()
+            fc.reagents = dict()
 
         # Add reagents from experiment config to flowcells
         for fc in flowcells:
-            self._reagents_manager.add_from_config(fc, exp_config)
+            self._reagents_manager.add_from_config(fc.name, exp_config)
 
         # Add ROIs from experiment config to flowcels
         roi_path = Path(exp_config["experiment"].get("roi_path", "."))
         if roi_path.is_file():
             LOGGER.info(f"Adding ROIs from {roi_path}")
-            n_rois_added = self.add_rois(flowcells, roi_path)
+            n_rois_added = self.add_rois(fc_names, roi_path)
             LOGGER.info(f"Added {n_rois_added} ROIs")
 
         # Read protocol from experiment config
@@ -935,24 +924,24 @@ class BaseSequencer(BaseSystem):
         fprotocol = {}
         for fc in flowcells:
             protocol = read_protocol(exp_config["experiment"]["protocol_path"])
-            fprotocol[fc] = format_protocol(fc, protocol, exp_config)
+            fprotocol[fc.name] = format_protocol(fc.name, protocol, exp_config)
 
         # Check if reagents are needed
         for fc in flowcells:
-            missing_reagents = need_reagents(fprotocol[fc], self.flowcells[fc].reagents)
+            missing_reagents = need_reagents(fprotocol[fc.name], fc.reagents)
             if missing_reagents > 0:
                 raise ValueError(
-                    f"Missing {missing_reagents} reagents for flowcell {fc}"
+                    f"Missing {missing_reagents} reagents for flowcell {fc.name}"
                 )
 
         # Check if ROIs needed -> wait for ROIs if none in config
         for fc in flowcells:
-            if not check_for_rois(fprotocol[fc]) and len(self.flowcells[fc].ROIs) == 0:
-                await self._roi_manager.wait_for_rois(fc)
+            if not check_for_rois(fprotocol[fc.name]) and len(fc.ROIs) == 0:
+                await self._roi_manager.wait_for_rois(fc.name)
 
         # Add steps from protocol to queues
         for fc in flowcells:
-            self.queue_protocol(fc, fprotocol[fc])
+            self.queue_protocol(fc.name, fprotocol[fc.name])
 
     def queue_protocol(self, flowcell: Union[str, int], fprotocols: dict):
         for pname, protocol in fprotocols.items():
@@ -974,9 +963,15 @@ class BaseSequencer(BaseSystem):
                     elif "USER" in step[0]:
                         self.user(flowcells=flowcell, **params)
                     elif "IMAG" in step[0]:
-                        self.image(flowcells=flowcell, **params)
+                        if "stage" in params:
+                            self.image(flowcells=flowcell, **params)
+                        else:
+                            self.image(flowcells=flowcell)
                     elif "EXPO" in step[0]:
-                        self.expose(flowcells=flowcell, **params)
+                        if "stage" in params:
+                            self.expose(flowcells=flowcell, **params)
+                        else:
+                            self.expose(flowcells=flowcell)
 
     @abstractmethod
     def custom_roi_factory(name: str, flowcell: Union[str, int], **kwargs) -> ROI:

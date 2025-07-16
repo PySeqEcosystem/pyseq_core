@@ -1,6 +1,9 @@
 [experiment]
-image_path = ""
+name = ""
+output_path = "."
+image_path = "images"
 focus_path = ""
+log_path = "logs"
 roi_path = ""
 protocol_path = ""
 
@@ -31,6 +34,6 @@ exposure.Camera_558_687 = 1
 exposure.Camera_610_740 = 1                                           
 
 [pump]
-flow_rate = 100                                                                 # uL/min
+flow_rate = 0                                                                   # uL/min
 pause_time = 1                                                                  # Time to wait between aspirate and dispense in s
 waste_flow_rate = 12000                                                         # uL/min
