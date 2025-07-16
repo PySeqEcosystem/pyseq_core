@@ -24,13 +24,13 @@ jobs:
         python-version: ${{ matrix.python-version }}
         
     - name: Test with python ${{ matrix.python-version }} and ${{ matrix.os }}
-      run: uv run --frozen --dev pytest test --junit-xml pytest.xml
+      run: uv run --frozen --dev pytest tests --junit-xml pytest.xml
 
     - name: Upload Test Results
       if: (!cancelled())
       uses: actions/upload-artifact@v4
       with:
-        name: Test Results (Python ${{ matrix.python-version }})
+        name: Test Results (Python ${{ matrix.python-version }} and ${{ matrix.os }})
         path: pytest.xml
     
         
