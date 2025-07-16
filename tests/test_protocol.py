@@ -11,6 +11,7 @@ async def test_protocol(BaseTestSequencer, tmp_path):
     exp_file = "test_experiment.toml"
     exp_path = resource_path / "test_experiment.toml"
     exp_conf = tomlkit.parse(open(exp_path).read())
+    exp_name = exp_conf["experiment"]["name"]
 
     # Update paths in experiment configuration
     protocol_file = "test_protocol.yaml"
@@ -25,10 +26,15 @@ async def test_protocol(BaseTestSequencer, tmp_path):
     copyfile(resource_path / protocol_file, tmp_path / protocol_file)
     copyfile(resource_path / roi_file, tmp_path / roi_file)
 
-    BaseTestSequencer.new_experiment(["A", "B"], tmp_path / exp_file)
-    print(1, BaseTestSequencer.flowcells["A"]._worker_task)
+    BaseTestSequencer.new_experiment(["A", "B"], tmp_path / exp_file, exp_name)
     await BaseTestSequencer._queue.join()
-    print(2, BaseTestSequencer.flowcells["A"]._worker_task)
+
+    # Check paths are created
+    assert (tmp_path / exp_name).exists()
+    paths = ["images", "focus", "log"]
+    for p in paths:
+        assert (tmp_path / exp_name / p).exists()
+    assert (tmp_path / exp_name / p / f"{exp_name}.log").exists()
 
     # Check protocol is queued
     assert len(BaseTestSequencer.flowcells["A"]._queue_dict) > 0
@@ -43,7 +49,6 @@ async def test_protocol(BaseTestSequencer, tmp_path):
     assert len(BaseTestSequencer.flowcells["B"].reagents) > 0
 
     # Clear Queue and start flowcells for clean teardown
-    print(3, BaseTestSequencer.flowcells["A"]._worker_task)
     await BaseTestSequencer.flowcells["A"].clear_queue()
     await BaseTestSequencer.flowcells["B"].clear_queue()
     await BaseTestSequencer.microscope.clear_queue()

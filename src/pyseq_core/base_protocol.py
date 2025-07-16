@@ -272,7 +272,7 @@ def ImageParamsFactory(exp_config: dict) -> BaseModel:
 
     class ImageParams(BaseModel):
         optics: Optics = Optics(**exp_config["image"])
-        output: str = exp_config["experiment"]["image_path"]
+        output: str = exp_config["experiment"]["images_path"]
         nz: int = exp_config["image"]["nz"]
 
         @field_validator("output", mode="after")
@@ -396,10 +396,14 @@ class BasePumpCommand(BaseModel):
     reagent: Union[int, str] = None
     reverse: bool = False
     flowcell: Union[str, int] = None
+    update_flow_rate: bool = False
 
     @model_validator(mode="after")
     def validate_flowrate_volume(self) -> Self:
-        validate_min_max("flow_rate", self.flow_rate, HW_CONFIG[f"Pump{self.flowcell}"])
+        if self.flow_rate != 0:
+            validate_min_max(
+                "flow_rate", self.flow_rate, HW_CONFIG[f"Pump{self.flowcell}"]
+            )
         validate_min_max("volume", self.volume, HW_CONFIG[f"Pump{self.flowcell}"])
         if isinstance(self.reagent, int):
             validate_in(HW_CONFIG[f"Valve{self.flowcell}"]["valid_list"], self.reagent)
@@ -512,8 +516,9 @@ def check_pump(
     """Check and format pump command.
 
     If only a number is specifed, `volume` will be set to the number,
-    `flow_rate` will be set to the default flow rate, and `reagent`
-    will be set to the last reagent specified in the protocol.
+    `flow_rate` will be set to 0, and `reagent` will be set to the last reagent
+    specified in the protocol. The updated `flow_rate` will then be pulled from
+    the reagent dictionary stored on the VALVE.
 
     PUMP: {reagent: str|int, volume: number, flow_rate: number}
 
@@ -522,7 +527,7 @@ def check_pump(
     if isinstance(params, dict):
         command = PumpCommand(flowcell=flowcell, **params)
     else:
-        command = PumpCommand(flowcell=flowcell, volume=params)
+        command = PumpCommand(flowcell=flowcell, volume=params, flow_rate=0)
 
     return command.model_dump()
 
@@ -693,6 +698,7 @@ def format_protocol(flowcell: str, protocols: dict, exp_config: dict) -> dict:
                     flowcell, exp_config, command, params, last_port
                 )
                 if "VALV" not in command:
+                    # Move VALV commands to PUMP
                     reformated_steps.append((command, fparams))
             except Exception as err:
                 errors += 1

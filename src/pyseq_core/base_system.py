@@ -1,5 +1,10 @@
 from abc import ABC, abstractmethod
-from pyseq_core.utils import DEFAULT_CONFIG, HW_CONFIG, setup_experiment_path
+from pyseq_core.utils import (
+    DEFAULT_CONFIG,
+    HW_CONFIG,
+    setup_experiment_path,
+    update_logger,
+)
 from pyseq_core.base_instruments import (
     BaseYStage,
     BaseXStage,
@@ -277,8 +282,8 @@ class BaseSystem(ABC):
 class BaseMicroscope(BaseSystem):
     name: str = field(default="microscope")
     lock_condition: asyncio.Lock = field(factory=asyncio.Lock)
-    image_path: Dict[str, Path] = field(factory=dict)
-    focus_path: Dict[str, Path] = field(factory=dict)
+    # image_path: Dict[str, Path] = field(factory=dict)
+    # focus_path: Dict[str, Path] = field(factory=dict)
 
     @property
     def YStage(self) -> BaseYStage:
@@ -476,7 +481,7 @@ class BaseFlowCell(BaseSystem):
     def pump(
         self,
         volume: Union[int, float],
-        flow_rate: Union[int, float],
+        flow_rate: Union[int, float] = 0,
         reagent: Union[int, str] = None,
         reverse: bool = False,
         **kwargs,
@@ -487,8 +492,7 @@ class BaseFlowCell(BaseSystem):
             if not self.select_port(reagent):
                 raise KeyError(f"{reagent} is invalid for Valve {self.name}")
 
-        # default flow_rate = 0
-        if not flow_rate:
+        if flow_rate == 0:
             flow_rate = self.reagents[reagent].get("flow_rate")
 
         if not reverse:
@@ -876,30 +880,33 @@ class BaseSequencer(BaseSystem):
 
         return len(rois)
 
-    def new_experiment(self, fc_names: Union[str, int], exp_config_path: str):
+    def new_experiment(
+        self, fc_names: Union[str, int], exp_config_path: str, exp_name: str
+    ):
         """Load new experimenet from config file for specified flowcells"""
         # Pause flowcells
         flowcells = self._get_fc_list(fc_names)
         for fc in flowcells:
-            print(fc.name, fc._worker_task)
             if not fc._queue.empty():
                 raise RuntimeError(
                     f"Flow cell {fc.name} still running, stop flow cell before starting new experiment"
                 )
             else:
                 fc.pause()
-            print(fc.name, fc._worker_task)
         # Load new experiment
         description = "Load new experiment"
         self.add_task(description, self._new_experiment, fc_names, exp_config_path)
 
-    async def _new_experiment(self, fc_names: Union[str, int], exp_config_path: str):
+    async def _new_experiment(
+        self, fc_names: Union[str, int], exp_config_path: str, exp_name: str = ""
+    ):
         """Load new experimenet task."""
 
         # Read experiment config
         exp_config = read_user_config(exp_config_path)
         # Set up paths for imaging, focusin, and logging and update exp_config
-        exp_config = setup_experiment_path(exp_config)
+        exp_config = setup_experiment_path(exp_config, exp_name)
+        update_logger(exp_config["logging"])
 
         # Reset rois and reagents
         flowcells = self._get_fc_list(fc_names)

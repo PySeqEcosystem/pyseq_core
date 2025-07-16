@@ -4,6 +4,7 @@ import yaml
 import os
 import importlib
 import logging
+import logging.config  # Need to import, or I get an AttributeError?
 import datetime
 
 LOGGER = logging.getLogger("PySeq")
@@ -59,30 +60,42 @@ def deep_merge(src_dict, dst_dict):
     return dst_dict
 
 
-def setup_experiment_path(exp_config: dict) -> dict:
+def setup_experiment_path(exp_config: dict, exp_name: str) -> dict:
     """Set up paths for imaging & focusing."""
 
-    # Get experiment name, image path, and log path
-    exp_name = exp_config["experiment"]["name"]
+    # Get experiment name
+    if len(exp_name) == 0:
+        exp_name = exp_config["experiment"]["name"]
     if len(exp_name) == 0:
         exp_name = "PySeq_" + datetime.now().strftime("%Y%m%d")
-    output_path = Path(exp_config["experiment"]["output_path"]) / exp_name
-    image_path = output_path / exp_config["experiment"]["image_path"]
-    log_path = output_path / exp_config["experiment"]["log_path"]
-    # Allow custom focus path with default = output_path / focus
-    focus_path = exp_config["experiment"]["focus_path"]
-    if len(focus_path) == 0:
-        focus_path = output_path / "focus"
-    else:
-        focus_path = Path(focus_path)
-    # Make paths
-    image_path.mkdir(parents=True, exist_ok=True)
-    focus_path.mkdir(parents=True, exist_ok=True)
-    log_path.mkdir(parents=True, exist_ok=True)
-    # Update config file
     exp_config["experiment"]["name"] = exp_name
-    exp_config["experiment"]["image_path"] = str(image_path)
-    exp_config["experiment"]["focus_path"] = str(focus_path)
-    exp_config["experiment"]["log_path"] = str(log_path)
+    # Setup paths output paths for images, logs, and focus data
+    output_path = Path(exp_config["experiment"]["output_path"]) / exp_name
+    paths = ["images", "focus", "log"]
+    for p in paths:
+        config_path = exp_config["experiment"][f"{p}_path"]
+        if len(config_path) == 0:
+            p_ = output_path / p
+        else:
+            p_ = Path(config_path) / exp_name / p
+        p_.mkdir(parents=True, exist_ok=True)
+        exp_config["experiment"][f"{p}_path"] = str(p_)
 
+    # Update logger configuration
+    exp_config["logging"]["handlers"]["fileHandler"]["filename"] = (
+        f"{p_}/{exp_name}.log"
+    )
     return exp_config
+
+
+def update_logger(logger_conf: dict, rotating: bool = False):
+    if rotating:
+        # Remove FileHandler if running tests or idleing
+        del logger_conf["handlers"]["fileHandler"]
+        logger_conf["loggers"]["PySeq"]["handlers"].append("rotatingHandler")
+    else:
+        # Remove RotatingFileHandler during experiment runs
+        del logger_conf["handlers"]["rotatingHandler"]
+        logger_conf["loggers"]["PySeq"]["handlers"].append("fileHandler")
+    # Need to import logging.config ?
+    logging.config.dictConfig(logger_conf)
