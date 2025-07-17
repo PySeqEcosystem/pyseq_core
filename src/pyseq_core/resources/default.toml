@@ -1,9 +1,9 @@
 [experiment]
-name = ""
-output_path = "."
-image_path = "images"
+name = ""                                                                       # Name of experiment
+output_path = "."                                                               # Base output directory, default=current working directory
+images_path = ""                                                                # Image directory, default = output_path/images
 focus_path = ""
-log_path = "logs"
+log_path = ""
 roi_path = ""
 protocol_path = ""
 
@@ -37,3 +37,46 @@ exposure.Camera_610_740 = 1
 flow_rate = 0                                                                   # uL/min
 pause_time = 1                                                                  # Time to wait between aspirate and dispense in s
 waste_flow_rate = 12000                                                         # uL/min
+
+[logging]
+version = 1
+disable_existing_loggers = true
+
+[logging.formatters.brief]
+format = "%(asctime)s | %(levelname)s - %(message)s"
+datefmt = "%m-%d %H:%M"
+
+[logging.formatters.long]
+format = "%(asctime)s | %(name)s - %(levelname)s - %(message)s"
+datefmt = "%Y%m%d %H:%M:%S"
+
+[logging.handlers.consoleHandler]
+class = "logging.StreamHandler"
+level = "INFO"
+formatter = "brief"
+stream = "ext://sys.stdout"
+
+[logging.handlers.rotatingHandler]
+class = "logging.handlers.TimedRotatingFileHandler"
+level = "DEBUG"
+formatter = "long"
+filename = "~/.config/pyseq2500/logs/pyseq.log"
+when = "midnight"
+backupCount = 10
+
+[logging.handlers.fileHandler]
+class = "logging.FileHandler"
+level = "DEBUG"
+formatter = "long"
+filename = ""
+
+[logging.loggers.PySeq]
+level = "DEBUG"
+handlers = []
+propagate = false
+
+[logging.root]
+level = "WARNING"
+handlers = ["consoleHandler"]
+
+ROTATE_LOGS = false                                                             # flag to rotate logs during testing or idleing

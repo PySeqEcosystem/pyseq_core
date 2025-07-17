@@ -53,7 +53,12 @@ async def check_fc_queue(
         if check_microscope:
             m = sequencer.microscope
             _.append(wait_for_microscope_queue(m))
-        await asyncio.wait_for(asyncio.gather(*_), timeout)
+        try:
+            await asyncio.wait_for(asyncio.gather(*_), timeout)
+        except TimeoutError as e:
+            print(e)
+            for fc in flowcells:
+                print(fc.name, fc._current_task)
 
         # Check tasks cleared
         for fc in flowcells:
