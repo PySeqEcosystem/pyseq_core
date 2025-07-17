@@ -396,7 +396,6 @@ class BasePumpCommand(BaseModel):
     reagent: Union[int, str] = None
     reverse: bool = False
     flowcell: Union[str, int] = None
-    update_flow_rate: bool = False
 
     @model_validator(mode="after")
     def validate_flowrate_volume(self) -> Self:

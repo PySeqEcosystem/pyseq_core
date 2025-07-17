@@ -36,7 +36,7 @@ async def test_protocol(BaseTestSequencer, tmp_path):
     paths = ["images", "focus", "log"]
     for p in paths:
         assert (tmp_path / exp_name / p).exists()
-    assert Path("~/.config/pyseq2500/pyseq.log").exists()
+    assert Path("~/.config/pyseq2500/logs/pyseq.log").expanduser().exists()
 
     # Check protocol is queued
     assert len(BaseTestSequencer.flowcells["A"]._queue_dict) > 0
