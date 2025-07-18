@@ -7,6 +7,7 @@ import logging
 import logging.config  # Need to import, or I get an AttributeError?
 import logging.handlers
 import datetime
+# from pyseq_core.base_instruments import BaseCOM
 
 LOGGER = logging.getLogger("PySeq")
 
@@ -104,3 +105,23 @@ def update_logger(logger_conf: dict, rotating: bool = False):
     logger_conf["loggers"]["PySeq"]["handlers"] = list(logger_conf["handlers"].keys())
     # Need to import logging.config ?
     logging.config.dictConfig(logger_conf)
+
+
+def map_coms(com_class):
+    _coms = {}
+    for instrument, values in HW_CONFIG.items():
+        if "address" in values:
+            _coms[instrument] = values["address"]
+
+    coms = {}
+    for instrument, address in _coms.items():
+        if address in coms:
+            coms[instrument] = coms[address]
+        elif address in _coms:
+            coms[address] = com_class(address)
+            coms[instrument] = coms[address]
+        elif instrument in coms:
+            pass
+        else:
+            coms[instrument] = com_class(address)
+    return coms

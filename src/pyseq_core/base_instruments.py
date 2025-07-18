@@ -9,18 +9,26 @@ import asyncio
 
 
 @define
-class BaseCOM(ABC):
+class BaseCOM:
     address: str = field()
     lock: asyncio.Lock = field(factory=asyncio.Lock)
+
+    # def __init__(self, address:str):
+    #     self.address = address
+    @abstractmethod
+    async def connect(self) -> bool:
+        async with self.lock:
+            pass
+
+    @abstractmethod
+    async def is_alive(self) -> bool:
+        async with self.lock:
+            pass
 
     @abstractmethod
     async def command(self, command: str):
         async with self.lock:
             pass
-
-    @abstractmethod
-    def initialize():
-        pass
 
 
 @define
@@ -31,7 +39,7 @@ class BaseInstrument(ABC):
 
     @config.default
     def get_config(self) -> dict:
-        # Get instrument configurationt settings
+        # Get instrument configuration settings
         with open(MACHINE_SETTINGS_PATH, "r") as f:
             config = yaml.safe_load(f)  # Machine config
         machine_name = config.get("name", None)  # Machine name
@@ -142,10 +150,10 @@ class BaseValve(BaseInstrument):
     def initial_port_value(self):
         return self.ports[0]
 
-    @_port.validator
-    def _validate_port(self, attribute, value):
-        if value not in self.ports:
-            raise ValueError(f"Port {value} not listed on {self.name}")
+    # @_port.validator
+    # def _validate_port(self, attribute, value):
+    #     if value not in self.ports:
+    #         raise ValueError(f"Port {value} not listed on {self.name}")
 
     @cached_property
     def ports(self):
@@ -228,7 +236,7 @@ class BaseShutter(BaseInstrument):
     _open: bool = field(init=False)
 
     @abstractmethod
-    async def open(self):
+    async def move(self, open: bool):
         """Open the shutter."""
         pass
 
@@ -236,6 +244,16 @@ class BaseShutter(BaseInstrument):
     async def close(self):
         """Close the shutter."""
         pass
+
+    @property
+    def open(self):
+        """Position of shutter"""
+        self._open
+
+    @open.setter
+    def open(self, open):
+        """Set position of shutter"""
+        self._open = open
 
 
 class BaseCamera(BaseInstrument):

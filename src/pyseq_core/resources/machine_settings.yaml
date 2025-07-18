@@ -1,23 +1,28 @@
 name: Test
 Test:
   flowcells: ['A', 'B']
-  TemperatureControllerA: &fc_temp
-    min_val: 4
-    max_val: 60
-  TemperatureControllerB: *fc_temp
   PumpA: &pump
+    address: COM1
     volume:
       min_val: 100 #uL 
       max_val: 2000 #uL
+      units: uL
     flow_rate:
       min_val: 100 #uL/min
       max_val: 10000 #uL/min
-  PumpB: *pump
+      units: ul/min
+  PumpB: 
+    <<: *pump
+    address: COM2
   ValveA: &reagent_valve
+    address: COM3
     n_ports: 24
     valid_list: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
-  ValveB: *reagent_valve
+  ValveB: 
+    <<: *reagent_valve
+    address: COM4
   XStage:
+    address: COM5
     spum: 1
     origin: 
       A: 100
@@ -25,41 +30,64 @@ Test:
     step: 100
     min_val: 0
     max_val: 50000
+    units: steps
   YStage:
+    address: COM6
     spum: 1
     origin: 300
     step: 200
     min_val: -7000000
     max_val: 7000000
+    units: steps
   TiltStage:
+    address: COM8, COM9
     spum: 100
     min_val: 0
     max_val: 30000
+    units: steps
   ZStage:
+    address: TiltStage
     spum: 1
     step: 1
     min_val: 0
     max_val: 65000
+    units: steps
   stage: 
     tilt1: &tilt
       min_val: 0
       max_val: 30000
+      units: steps
     tilt2: *tilt
     tilt3: *tilt
   redLaser: &red_laser
+    address: COM10
     min_val: 0
     max_val: 400
+    units: mW
   greenLaser: &green_laser
+    address: COM11
     min_val: 0
     max_val: 400 
+    units: mW
+  TemperatureControllerA: &fc_temp
+    address: TiltStage
+    min_val: 4
+    max_val: 60
+    units: C
+  TemperatureControllerB: *fc_temp
+  Shutter:
+    address: TiltStage
   redFilterWheel: &red_filter_wheel
+    address: TiltStage
     valid_list: {'home':0, 'open':1, '0.1':2, '1.0':3}
   greenFilterWheel: &green_filter_wheel 
+    address: TiltStage
     valid_list: {'home':0, 'open':1, '0.1':2, '2.0':3}
   Camera_558_687:
     exposure: &camera_exposure
       min_val: 0.1
       max_val: 10
+      units: s
   Camera_610_740:
     exposure: *camera_exposure
   optics:

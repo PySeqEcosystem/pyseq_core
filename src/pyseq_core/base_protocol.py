@@ -64,11 +64,12 @@ def validate_min_max(
 
     min_val = valid_dict[instrument]["min_val"]
     max_val = valid_dict[instrument]["max_val"]
+    units = valid_dict[instrument].get("units", "")
 
     if min_val <= value <= max_val:
         return value
     else:
-        msg = f"{instrument} value should be between {min_val} and {max_val}"
+        msg = f"{instrument} value should be between {min_val} and {max_val} {units}"
         LOGGER.error(msg)
         raise ValueError(msg)
 

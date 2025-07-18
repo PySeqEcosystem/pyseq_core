@@ -1,5 +1,6 @@
 from pyseq_core.base_system import BaseFlowCell, BaseMicroscope, BaseSequencer, ROI
 from pyseq_core.base_protocol import Optics
+from pyseq_core.utils import map_coms
 
 # from pyseq_core.baseROI import BaseROI, TestROI
 from pyseq_core.base_instruments import (
@@ -14,6 +15,7 @@ from pyseq_core.base_instruments import (
     BasePump,
     BaseValve,
     BaseTemperatureController,
+    BaseCOM,
 )
 from typing import Literal
 from attrs import define, field
@@ -24,13 +26,44 @@ import asyncio
 LOGGER = logging.getLogger("PySeq")
 
 
-class TestCOM:
-    """Just for testing purposes define: initialize, shutdown, get_status, and
-    configure. Normally these are defined in the instrument classes, and only
-    command is defined.
+@define
+class TestCOM(BaseCOM):
+    open: bool = field(default=False)
+    # def __init__(self, address):
+    #     super().__init__(address=address)
+    # self.open = False
 
-    Do not inherit BaseCOM, it causes a TypeError.
+    async def connect(self):
+        if self.lock is not None:
+            async with self.lock:
+                if not self.open:
+                    LOGGER.debug(f"connecting to {self.address}")
+                    self.open = True
+                    return f"connected to {self.address}"
+                return f"sharing {self.address}"
+        return None
+
+    async def command(self, command: str):
+        """Send a command to the instrument."""
+        async with self.lock:
+            LOGGER.debug(f"{self.name}: Tx: {command}")
+
+
+class DumbBaseMethods:
+    """Concrete methods for: initialize, shutdown, get_status, and configure.
+
+    Mixin other instrument base classes for testing purposings.
+    Need __init__ function for testing.
+
+    Do not use for real concrete instrument classes.
+    Do not use __init__ for real instrument classes.
+
     """
+
+    def __init__(self, name: str, com: TestCOM = None, **kwargs):
+        self.name = name
+        self.com = com
+        self.open = False
 
     async def initialize(self):
         """Initialize the instrument."""
@@ -45,15 +78,23 @@ class TestCOM:
         pass
 
     async def configure(self):
+        if self.com is not None:
+            msg = await self.com.connect()
+            LOGGER.info(f"{self.name} {msg}")
+
         LOGGER.info(f"Configuring {self.name}")
-        pass
 
-    async def command(self, command: str):
-        """Send a command to the instrument."""
-        LOGGER.info(f"{self.name}: Tx: {command}")
+    # async def command(self, command: str):
+    #     """Send a command to the instrument."""
+    #     # async with self.lock:
+    #         # LOGGER.info(f"{self.name}: Tx: {command}")
+    #     LOGGER.info(f"{self.name}: Tx: {command}")
 
 
-class TestCamera(TestCOM, BaseCamera):
+COMS_DICT = map_coms(TestCOM)
+
+
+class TestCamera(DumbBaseMethods, BaseCamera):
     def __init__(self, name: str):
         super().__init__(name=name)
         self._exposure = 1
@@ -76,14 +117,21 @@ class TestCamera(TestCOM, BaseCamera):
         return self.exposure
 
 
-class TestShutter(TestCOM, BaseShutter):
-    def __init__(self, name="Shutter"):
-        super().__init__(name)
+class TestShutter(DumbBaseMethods, BaseShutter):
+    def __init__(
+        self,
+        com: TestCOM,
+        name="Shutter",
+    ):
+        super().__init__(name, com=com)
 
-    async def open(self):
+    async def move(self, open: bool):
         """Open the shutter."""
-        LOGGER.debug(f"Opening shutter {self.name}")
-        return True
+        if open:
+            LOGGER.debug(f"Opening {self.name}")
+        else:
+            LOGGER.debug(f"Closing {self.name}")
+        self.open = open
 
     async def close(self):
         """Close the shutter."""
@@ -91,9 +139,9 @@ class TestShutter(TestCOM, BaseShutter):
         return True
 
 
-class TestFilterWheel(TestCOM, BaseFilterWheel):
-    def __init__(self, color: str):
-        super().__init__(f"{color}FilterWheel")
+class TestFilterWheel(DumbBaseMethods, BaseFilterWheel):
+    def __init__(self, color: str, com: TestCOM):
+        super().__init__(f"{color}FilterWheel", com=com)
 
     async def set_filter(self, filter):
         """Select a filter on the wheel."""
@@ -101,10 +149,11 @@ class TestFilterWheel(TestCOM, BaseFilterWheel):
         self._filter = filter
 
 
-class TestLaser(TestCOM, BaseLaser):
-    def __init__(self, color: str):
-        super().__init__(f"{color}Laser", color=color)
+class TestLaser(DumbBaseMethods, BaseLaser):
+    def __init__(self, color: str, com: TestCOM):
+        super().__init__(f"{color}Laser", color=color, com=com)
         self._power = 0
+        self.color = color
 
     async def set_power(self, power):
         """Set laser power."""
@@ -116,9 +165,13 @@ class TestLaser(TestCOM, BaseLaser):
         return self.power
 
 
-class TestYStage(TestCOM, BaseYStage):
-    def __init__(self, name="YStage"):
-        super().__init__(name)
+class TestYStage(DumbBaseMethods, BaseYStage):
+    def __init__(
+        self,
+        com: TestCOM,
+        name="YStage",
+    ):
+        super().__init__(name, com=com)
         self._position = 0
 
     async def move(self, position):
@@ -129,9 +182,9 @@ class TestYStage(TestCOM, BaseYStage):
         return self._position
 
 
-class TestXStage(TestCOM, BaseXStage):
-    def __init__(self, name="XStage"):
-        super().__init__(name)
+class TestXStage(DumbBaseMethods, BaseXStage):
+    def __init__(self, com: TestCOM, name="XStage"):
+        super().__init__(name, com=com)
         self._position = 0
 
     async def move(self, position):
@@ -142,9 +195,9 @@ class TestXStage(TestCOM, BaseXStage):
         return self._position
 
 
-class TestTiltStage(TestCOM, BaseZStage):
-    def __init__(self, name="TiltStage"):
-        super().__init__(name)
+class TestTiltStage(DumbBaseMethods, BaseZStage):
+    def __init__(self, com: TestCOM, name="TiltStage"):
+        super().__init__(name, com=com)
         self._position = 0
 
     async def move(self, position):
@@ -155,9 +208,9 @@ class TestTiltStage(TestCOM, BaseZStage):
         return self._position
 
 
-class TestObjectiveStage(TestCOM, BaseObjectiveStage):
-    def __init__(self, name="ZStage"):
-        super().__init__(name)
+class TestObjectiveStage(DumbBaseMethods, BaseObjectiveStage):
+    def __init__(self, com: TestCOM, name="ZStage"):
+        super().__init__(name, com=com)
         self._position = 0
 
     async def move(self, position):
@@ -168,9 +221,9 @@ class TestObjectiveStage(TestCOM, BaseObjectiveStage):
         return self._position
 
 
-class TestPump(TestCOM, BasePump):
-    def __init__(self, name: str):
-        super().__init__(name)
+class TestPump(DumbBaseMethods, BasePump):
+    def __init__(self, name: str, com: TestCOM):
+        super().__init__(name, com=com)
 
     async def pump(self, volume, flow_rate, pause_time=0.1, waste_flow_rate=12000):
         """Pump a specified volume at a specified flow rate."""
@@ -190,17 +243,23 @@ class TestPump(TestCOM, BasePump):
 
 
 @define
-class TestValve(TestCOM, BaseValve):
+class TestValve(DumbBaseMethods, BaseValve):
+    def __init__(self, name: str, com: TestCOM):
+        super().__init__(name, com=com)
+
     async def select(self, port):
         """Pump a specified volume at a specified flow rate."""
 
-        if port in self.ports:
-            LOGGER.debug(f"{self.name}:: Selecting {port}")
-            self.port = port
-            return True
-        else:
-            LOGGER.warning(f"{self.name}:: Port {port} not found")
-            return False
+        # if port in self.ports:
+        #     LOGGER.debug(f"{self.name}:: Selecting {port}")
+        #     self.port = port
+        #     return True
+        # else:
+        #     LOGGER.warning(f"{self.name}:: Port {port} not found")
+        #     return False
+        LOGGER.debug(f"{self.name}:: Selecting {port}")
+        self.port = port
+        return True
 
     async def current_port(self):
         """Read current port from valve."""
@@ -209,9 +268,9 @@ class TestValve(TestCOM, BaseValve):
         return self._port
 
 
-class TestTemperatureController(TestCOM, BaseTemperatureController):
-    def __init__(self, name: str):
-        super().__init__(name)
+class TestTemperatureController(DumbBaseMethods, BaseTemperatureController):
+    def __init__(self, name: str, com: TestCOM):
+        super().__init__(name, com=com)
         self._temperature = 25
 
     async def set_temperature(self, temperature):
@@ -236,15 +295,18 @@ class TestMicroscope(BaseMicroscope):
                 "Camera_610_740": TestCamera("Camera_610_740"),
             },
             "FilterWheel": {
-                "red": TestFilterWheel("red"),
-                "green": TestFilterWheel("green"),
+                "red": TestFilterWheel("red", com=COMS_DICT["redFilterWheel"]),
+                "green": TestFilterWheel("green", com=COMS_DICT["greenFilterWheel"]),
             },
-            "Laser": {"red": TestLaser("red"), "green": TestLaser("green")},
-            "Shutter": TestShutter(),
-            "XStage": TestXStage(),
-            "YStage": TestYStage(),
-            "TiltStage": TestTiltStage(),
-            "ZStage": TestObjectiveStage(),
+            "Laser": {
+                "red": TestLaser("red", com=COMS_DICT["redLaser"]),
+                "green": TestLaser("green", com=COMS_DICT["greenLaser"]),
+            },
+            "Shutter": TestShutter(com=COMS_DICT["Shutter"]),
+            "XStage": TestXStage(com=COMS_DICT["XStage"]),
+            "YStage": TestYStage(com=COMS_DICT["YStage"]),
+            "TiltStage": TestTiltStage(com=COMS_DICT["TiltStage"]),
+            "ZStage": TestObjectiveStage(com=COMS_DICT["ZStage"]),
         }
         return instruments
 
@@ -255,9 +317,9 @@ class TestMicroscope(BaseMicroscope):
         """Capture an image and save it to the specified filename."""
 
         LOGGER.debug(f"Acquire {im_name}")
-        await self.Shutter.open()
+        await self.Shutter.move(open=True)
         await self.YStage.move(roi.stage.y_last)
-        await self.Shutter.close()
+        await self.Shutter.move(open=False)
         _ = []
         for c in self.Camera.values():
             _.append(c.save_image(im_name))
@@ -356,10 +418,15 @@ class TestFlowCell(BaseFlowCell):
     @instruments.default
     def set_instruments(self):
         instruments = {
-            "Pump": TestPump(name=f"Pump{self.name}"),
-            "Valve": TestValve(name=f"Valve{self.name}"),
+            "Pump": TestPump(
+                name=f"Pump{self.name}", com=COMS_DICT[f"Pump{self.name}"]
+            ),
+            "Valve": TestValve(
+                name=f"Valve{self.name}", com=COMS_DICT[f"Valve{self.name}"]
+            ),
             "TemperatureController": TestTemperatureController(
-                name=f"TemperatureController{self.name}"
+                name=f"TemperatureController{self.name}",
+                com=COMS_DICT[f"TemperatureController{self.name}"],
             ),
         }
         return instruments
@@ -396,11 +463,13 @@ class TestSequencer(BaseSequencer):
         fc = kwargs.get("flowcell")
 
         # x, y, Steps Per UMicron
-        x_spum = self.microscope.XStage.config["spum"]
-        y_spum = self.microscope.YStage.config["spum"]
+        x_spum = self._config["XStage"]["spum"]
+        y_spum = self._config["YStage"]["spum"]
         # x, y origin
-        x_origin = self.microscope.XStage.config["origin"][fc]
-        y_origin = self.microscope.YStage.config["origin"]
+        x_origin = self._config["XStage"]["origin"][fc]
+        y_origin = self._config["YStage"]["origin"]
+        # x_origin = self.microscope.XStage.config["origin"][fc]
+        # y_origin = self.microscope.YStage.config["origin"]
 
         x_init = LLx * x_spum + x_origin
         x_last = URx * x_spum + x_origin

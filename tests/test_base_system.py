@@ -87,8 +87,22 @@ async def test_temperature(BaseTestSequencer):
 
 @pytest.mark.asyncio
 async def test_pump(BaseTestSequencer, caplog):
+    # Positive control
     BaseTestSequencer.pump(volume=100, flow_rate=4000, reagent=1)
     assert await check_fc_queue(BaseTestSequencer, caplog, timeout=1)
+
+    # Negative controls
+    neg_cntrls = [
+        {"volume": 100, "flow_rate": 4000, "reagent": 25},  # invalid reagent
+        {"volume": 1, "flow_rate": 4000, "reagent": 1},  # volume too low
+        {"volume": 100, "flow_rate": 12000, "reagent": 1},  # flow rate too hight
+    ]
+    for params in neg_cntrls:
+        try:
+            BaseTestSequencer.pump(**params)
+            assert False
+        except ValueError:
+            assert True
 
 
 @pytest.mark.asyncio
