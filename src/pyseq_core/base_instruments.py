@@ -9,9 +9,17 @@ import asyncio
 
 
 @define
-class BaseCOM:
+class BaseCOM(ABC):
+    address: str = field()
+    lock: asyncio.Lock = field(factory=asyncio.Lock)
+
     @abstractmethod
     async def command(self, command: str):
+        async with self.lock:
+            pass
+
+    @abstractmethod
+    def initialize():
         pass
 
 
@@ -28,6 +36,9 @@ class BaseInstrument(ABC):
             config = yaml.safe_load(f)  # Machine config
         machine_name = config.get("name", None)  # Machine name
         return config.get(machine_name, {}).get(self.name, {})
+
+    def command(self, command: str):
+        return self.com.command(command)
 
     @abstractmethod
     async def initialize(self):
