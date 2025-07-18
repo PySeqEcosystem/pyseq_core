@@ -27,7 +27,7 @@ jobs:
       run: mkdir -p ~/.config/pyseq2500/logs
         
     - name: Test with python ${{ matrix.python-version }} and ${{ matrix.os }}
-      run: uv run --frozen --dev pytest tests --junit-xml pytest.xml
+      run: uv run --frozen --dev pytest --cov=src --junit-xml pytest.xml
 
     - name: Upload Test Results
       if: (!cancelled())
