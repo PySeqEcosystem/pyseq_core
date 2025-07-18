@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from pyseq_core.utils import MACHINE_SETTINGS_PATH
 import yaml
 from attrs import define, field
-from typing import Union, Self
+from typing import Union
 from functools import cached_property
 import time
 import asyncio
@@ -39,10 +39,6 @@ class BaseInstrument(ABC):
 
     def command(self, command: str):
         return self.com.command(command)
-
-    @classmethod
-    def from_com(cls, name: str, com: BaseCOM) -> Self:
-        return cls(name=name, com=com)
 
     @abstractmethod
     async def initialize(self):
