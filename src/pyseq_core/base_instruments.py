@@ -21,11 +21,6 @@ class BaseCOM:
             pass
 
     @abstractmethod
-    async def is_alive(self) -> bool:
-        async with self.lock:
-            pass
-
-    @abstractmethod
     async def command(self, command: str):
         async with self.lock:
             pass
@@ -59,7 +54,7 @@ class BaseInstrument(ABC):
         pass
 
     @abstractmethod
-    async def get_status(self):
+    async def status(self) -> bool:
         """Retrieve the current status of the instrument."""
         pass
 

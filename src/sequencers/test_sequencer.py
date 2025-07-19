@@ -34,13 +34,12 @@ class TestCOM(BaseCOM):
     # self.open = False
 
     async def connect(self):
-        if self.lock is not None:
-            async with self.lock:
-                if not self.open:
-                    LOGGER.debug(f"connecting to {self.address}")
-                    self.open = True
-                    return f"connected to {self.address}"
-                return f"sharing {self.address}"
+        async with self.lock:
+            if not self.open:
+                LOGGER.debug(f"connecting to {self.address}")
+                self.open = True
+                return f"connected to {self.address}"
+            return f"{self.address} shared with another instrument"
         return None
 
     async def command(self, command: str):
@@ -50,7 +49,7 @@ class TestCOM(BaseCOM):
 
 
 class DumbBaseMethods:
-    """Concrete methods for: initialize, shutdown, get_status, and configure.
+    """Concrete methods for: initialize, shutdown, status, and configure.
 
     Mixin other instrument base classes for testing purposings.
     Need __init__ function for testing.
@@ -73,15 +72,11 @@ class DumbBaseMethods:
         """Shutdown the instrument."""
         LOGGER.info(f"Shutting down {self.name}")
 
-    async def get_status(self):
+    async def status(self) -> bool:
         """Retrieve the current status of the instrument."""
-        pass
+        return True
 
     async def configure(self):
-        if self.com is not None:
-            msg = await self.com.connect()
-            LOGGER.info(f"{self.name} {msg}")
-
         LOGGER.info(f"Configuring {self.name}")
 
     # async def command(self, command: str):

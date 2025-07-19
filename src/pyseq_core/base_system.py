@@ -6,6 +6,7 @@ from pyseq_core.utils import (
     update_logger,
 )
 from pyseq_core.base_instruments import (
+    BaseInstrument,
     BaseYStage,
     BaseXStage,
     BaseZStage,
@@ -42,7 +43,9 @@ from pyseq_core.roi_manager import ROIManager, read_roi_config
 from typing import Dict, Union, List, Coroutine, Literal
 from attrs import define, field
 from pydantic import ValidationError
+from functools import cached_property
 from pathlib import Path
+from warnings import warn
 import asyncio
 import logging
 
@@ -229,53 +232,71 @@ class BaseSystem(ABC):
                 await_task.cancel()
 
     async def _initialize(self):
-        """Configure then initialize system."""
+        """Connect to instruments, then configure and initialize system."""
+
+        async def no_com():
+            return None
+
+        LOGGER.info(f"{self.name} Connecting to instruments")
+        _ = []
+        for instrument in self.iter_instruments:
+            if instrument.com is not None:
+                _.append(instrument.com.connect())
+            else:
+                _.append(no_com())
+        msgs = await asyncio.gather(*_)
 
         LOGGER.info(f"Configuring {self.name}")
-        # Configure instruments
         _ = []
-        for instrument in self.instruments.values():
-            if isinstance(instrument, dict):
-                # instruments organized in nested dict
-                for nest_instrument in instrument.values():
-                    _.append(nest_instrument.configure())
-            else:
-                _.append(instrument.configure())
+        for instrument, msg in zip(self.iter_instruments, msgs):
+            if msg is not None:
+                LOGGER.info(f"{instrument.name} {msg}")
+            _.append(instrument.configure())
         await asyncio.gather(*_)
         # Configure system
         await self._configure()
 
         LOGGER.info(f"Initializing {self.name}")
-        # Initialize all instruments
         _ = []
-        for instrument in self.instruments.values():
-            if isinstance(instrument, dict):
-                # instruments organized in nested dict
-                for nest_instrument in instrument.values():
-                    _.append(nest_instrument.initialize())
-            else:
-                _.append(instrument.initialize())
+        for instrument in self.iter_instruments:
+            _.append(instrument.initialize())
         await asyncio.gather(*_)
 
     async def _shutdown(self):
         """Shutdown the system."""
         LOGGER.info(f"Shutting down {self.name}")
-
-        # Shutdown all instruments
         _ = []
-        for instrument in self.instruments.values():
-            if isinstance(instrument, dict):
-                # instruments organized in nested dict
-                for nest_instrument in instrument.values():
-                    _.append(nest_instrument.shutdown())
-            else:
-                _.append(instrument.shutdown())
+        for instrument in self.iter_instruments:
+            _.append(instrument.shutdown())
         await asyncio.gather(*_)
+
+    async def _status(self):
+        """Check status all instruments comprising the system."""
+        LOGGER.info(f"Checking status of {self.name}")
+        _ = []
+        for instrument in self.iter_instruments:
+            _.append(instrument.status())
+        status = await asyncio.gather(*_)
+        if all(status):
+            return True
+        return False
 
     @abstractmethod
     async def _configure(self, command):
         """Configure the system."""
         pass
+
+    @cached_property
+    def iter_instruments(self) -> List[BaseInstrument]:
+        _ = []
+        for instrument in self.instruments.values():
+            if isinstance(instrument, dict):
+                # instruments organized in nested dict
+                for nest_instrument in instrument.values():
+                    _.append(nest_instrument)
+            else:
+                _.append(instrument)
+        return _
 
 
 @define(kw_only=True)
@@ -561,23 +582,28 @@ class BaseFlowCell(BaseSystem):
         self.add_task(description, self._roi_to_microscope, "expose", roi)
 
     def update_protocol_name(self, name: str):
-        description = f"Notify user of new protocol {name}"
+        description = f"Start protocol {name}"
         self.add_task(description, self.update_protocol_name_task, name)
 
     def update_protocol_name_task(self, name: str):
         self._protocol_name = name
-        LOGGER.info(f"Start protocol {name}")
+        # LOGGER.info(f"Start protocol {name}")
 
     def update_protocol_cycle(self, cycle: int, total_cycles: int):
-        description = f"Notify user new cycle {cycle}"
-        self.add_task(description, self.update_protocol_cycle_task, cycle, total_cycles)
+        if total_cycles > 1:
+            description = (
+                f"Start {cycle}/{total_cycles} of protocol {self._protocol_name}"
+            )
+            self.add_task(
+                description, self.update_protocol_cycle_task, cycle, total_cycles
+            )
 
     def update_protocol_cycle_task(self, cycle: int, total_cycles: int):
         self._protocol_cycle = cycle
-        if total_cycles > 1:
-            LOGGER.info(
-                f"Start {cycle}/{total_cycles} of protocol {self._protocol_name}"
-            )
+        # if total_cycles > 1:
+        #     LOGGER.info(
+        #         f"Start {cycle}/{total_cycles} of protocol {self._protocol_name}"
+        #     )
 
     async def _hold(self, duration):
         """Async hold for specified duration in minutes."""
@@ -789,7 +815,9 @@ class BaseSequencer(BaseSystem):
         for s in systems:
             s.start()
 
-    def _get_systems_list(self, systems: Union[str, List[str]] = []):
+    def _get_systems_list(
+        self, systems: Union[str, List[str]] = []
+    ) -> List[BaseSystem]:
         """Return list of valid flow cell and microscope systems."""
 
         fc_list = self._get_fc_list()
@@ -815,7 +843,7 @@ class BaseSequencer(BaseSystem):
 
         return systems_
 
-    def _get_fc_list(self, fc: Union[str, list] = None):
+    def _get_fc_list(self, fc: Union[str, list] = None) -> List[BaseFlowCell]:
         """Return list of valid flowcells."""
 
         if fc is None:
@@ -847,7 +875,7 @@ class BaseSequencer(BaseSystem):
     def enable(self, flowcells: Union[str, list]):
         """Toggle flowcells to be enabled/disabled"""
         for fc in self._get_fc_list(flowcells):
-            status = not self._flowcells[fc]
+            status = not self._flowcells[fc].enable
             self._flowcells[fc].enabled = status
             self._enable[fc] = status
 
@@ -941,16 +969,34 @@ class BaseSequencer(BaseSystem):
                     f"Missing {missing_reagents} reagents for flowcell {fc.name}"
                 )
 
-        # Check if ROIs needed -> wait for ROIs if none in config
-        for fc in flowcells:
-            if not check_for_rois(fprotocol[fc.name]) and len(fc.ROIs) == 0:
-                await self._roi_manager.wait_for_rois(fc.name)
+        # Check status of systems
+        _ = []
+        for s in self._get_systems_list():
+            _.append(s._status())
+        _.append(self._status())
+        status = await asyncio.gather(*_)
+        if all(status):
+            all_systems_go = True
+        else:
+            warn("Some systems are not ready")
+            # TODO: get user confirmation to proceed if there are system issues
+            all_systems_go = True
+
+        if all_systems_go:
+            # Check if ROIs needed -> wait for ROIs if none in config
+            for fc in flowcells:
+                if not check_for_rois(fprotocol[fc.name]) and len(fc.ROIs) == 0:
+                    await self._roi_manager.wait_for_rois(fc.name)
 
         # Add steps from protocol to queues
         for fc in flowcells:
-            self.queue_protocol(fc.name, fprotocol[fc.name])
+            description = f"Queue protocol on {fc.name}"
+            self.add_task(
+                description, self._queue_protocol, fc.name, fprotocol[fc.name]
+            )
+            # self._queue_protocol(fc.name, fprotocol[fc.name])
 
-    def queue_protocol(self, flowcell: Union[str, int], fprotocols: dict):
+    async def _queue_protocol(self, flowcell: Union[str, int], fprotocols: dict):
         for pname, protocol in fprotocols.items():
             LOGGER.info(f"Queueing protocol {pname} on flowcell {flowcell}")
             self.flowcells[flowcell].update_protocol_name(pname)
