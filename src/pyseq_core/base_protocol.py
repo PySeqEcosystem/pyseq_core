@@ -93,6 +93,22 @@ def validate_path(value: str) -> str:
         raise ValueError
 
 
+## Consider rewriting class factories like this
+# class BaseROIFactory:
+#     def __init__(self, config):
+#         self.config = config
+#     def __call__(self, name: str, flowcell: str = None, **kwargs):
+#         # Simplified for example
+#         class DynamicROI:
+#             def __init__(self, name, flowcell=None, **kwargs):
+#                 self.name = name
+#                 self.stage = type('Stage', (object,), {'flowcell': flowcell})()
+#                 self.kwargs = kwargs
+#             def __repr__(self):
+#                 return f"DynamicROI(name='{self.name}', flowcell='{self.stage.flowcell}', kwargs={self.kwargs})"
+#         return DynamicROI(name, flowcell, **kwargs)
+
+
 class BaseStagePosition(BaseModel):
     """Stage position information to tile over a region of interest."""
 
