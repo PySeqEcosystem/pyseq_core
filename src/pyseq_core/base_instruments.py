@@ -12,16 +12,44 @@ import asyncio
 class BaseCOM:
     address: str = field()
     lock: asyncio.Lock = field(factory=asyncio.Lock)
+    """
+    Abstract base class for communication interfaces.
 
-    # def __init__(self, address:str):
-    #     self.address = address
+    Attributes:
+        address (str): The address of the communication interface.
+        lock (asyncio.Lock): An asyncio lock to ensure thread-safe access to the interface.
+    """
+
     @abstractmethod
     async def connect(self) -> bool:
+        """
+        Asynchronously establishes a connection to the communication interface.
+
+        Returns:
+            bool: True if the connection is successful, otherwise False.
+        """
         async with self.lock:
             pass
 
     @abstractmethod
-    async def command(self, command: str):
+    async def command(self, command: str) -> Union[str, dict]:
+        """
+        Asynchronously sends a command to the communication interface.
+
+        Args:
+            command (str): The command string to be sent.
+        """
+        async with self.lock:
+            pass
+
+    @abstractmethod
+    async def close(self) -> bool:
+        """
+        Asynchronously closee a connection to the communication interface.
+
+        Returns:
+            bool: True if the connection is gracefully closed, otherwise False.
+        """
         async with self.lock:
             pass
 
@@ -31,137 +59,368 @@ class BaseInstrument(ABC):
     name: str
     com: BaseCOM = field(init=False)
     config: dict = field(init=False)
+    """
+    Abstract base class for instrument implementations.
+
+    This class defines the interface that all instrument classes must implement.
+    Subclasses should provide concrete implementations for all abstract methods.
+
+    Attributes:
+        name (str): The name of the instrument.
+        com (BaseCOM): The communication interface for the instrument.
+        config (dict): The configuration settings for the instrument, loaded from a YAML file.
+    """
 
     @config.default
     def get_config(self) -> dict:
+        """Get instrument configuration settings from the machine settings file.
+
+        This method reads the global machine settings file (MACHINE_SETTINGS_PATH),
+        identifies the current machine's name, and then extracts the configuration
+        specific to this instrument instance.
+
+        Returns:
+            dict: A dictionary containing the instrument's configuration settings.
+                Returns an empty dictionary if the machine name or instrument
+                configuration is not found.
+        """
         # Get instrument configuration settings
         with open(MACHINE_SETTINGS_PATH, "r") as f:
             config = yaml.safe_load(f)  # Machine config
         machine_name = config.get("name", None)  # Machine name
         return config.get(machine_name, {}).get(self.name, {})
 
-    def command(self, command: str):
-        return self.com.command(command)
+    async def command(self, command: Union[str, dict]):
+        """Send a command string to the instrument.
+
+        This method forwards the given command to the instrument's communication
+        interface (`self.com`).
+
+        Args:
+            command (str, dict): The command string to send to the instrument.
+
+        Returns:
+            str,dict: The response received from the instrument's communication interface.
+        """
+        return await self.com.command(command)
 
     @abstractmethod
     async def initialize(self):
-        """Initialize the instrument."""
-        pass
+        """
+        Initialize the instrument.
+
+        This method should be implemented by subclasses to perform any setup
+        required before the instrument can be used, such as configuring hardware.
+
+        Raises:
+            NotImplementedError: If the subclass does not implement this method.
+        """
 
     @abstractmethod
     async def shutdown(self):
-        """Shutdown the instrument."""
-        pass
+        """Shutdown the instrument.
+
+        This method should be implemented by subclasses to gracefully
+        shutdown the instrument, releasing resources, or putting the hardware
+        into a safe state.
+        """
 
     @abstractmethod
     async def status(self) -> bool:
-        """Retrieve the current status of the instrument."""
-        pass
+        """Retrieve the current operational status of the instrument.
+
+        This method should be implemented by subclasses to query the instrument
+        and determine its current state.
+
+        Returns:
+            bool: True if the instrument is operational and ready for use,
+                False otherwise.
+        """
 
     @abstractmethod
     async def configure(self):
-        """Configure the instrument."""
-        pass
+        """Configure the instrument.
+
+        This method should be implemented by subclasses to apply specific
+        configuration settings to the instrument, typically based on the
+        `self.config` attribute. This might involve sending commands to the
+        hardware to set parameters or modes of operation.
+        """
 
 
 @define
 class BaseStage(BaseInstrument):
     _position: Union[int, float] = field(init=False)
+    """
+    Abstract base class for a microscope stage instrument.
+
+    This class extends `BaseInstrument` to define common properties and
+    abstract methods for controlling a stage, such as moving to a position
+    and retrieving the current position.
+
+    Attributes:
+        _position (Union[int, float]): The cached current position of the stage.
+            This attribute is not initialized directly but is set by the `position` setter.
+    """
 
     @cached_property
     def min_position(self) -> Union[float, int]:
+        """The minimum allowed position for the stage.
+
+        This value is retrieved from the instrument's configuration settings
+        under the key "min_val".
+
+        Returns:
+            Union[float, int]: The minimum position.
+        """
         return self.config.get("min_val")
 
     @cached_property
     def max_position(self) -> Union[float, int]:
+        """The maximum allowed position for the stage.
+
+        This value is retrieved from the instrument's configuration settings
+        under the key "max_val".
+
+        Returns:
+            Union[float, int]: The maximum position.
+        """
         return self.config.get("max_val")
 
     @abstractmethod
     async def move(self, positiion):
-        pass
+        """Move the stage to a specified position.
+
+        This method should be implemented by subclasses to send commands to the
+        physical stage to move it to the target position.
+
+        Args:
+            positiion (Union[int, float]): The target position to move the stage to.
+        """
 
     @abstractmethod
     async def get_position(self):
+        """Retrieve the current actual position of the stage.
+
+        This method should be implemented by subclasses to query the physical
+        stage for its current position and save it with the `position` setter.
+
+        Returns:
+            Union[int, float]: The current position of the stage.
+        """
         pass
 
     @property
     def position(self):
-        """Cached stage position."""
+        """Cached stage position.
+
+        This property provides access to the internally stored position of the stage.
+        It does not query the physical hardware.
+
+        Returns:
+            Union[int, float]: The cached current position of the stage.
+        """
         return self._position
 
     @position.setter
     def position(self, position):
-        """Set the current position of the stage."""
+        """Set the current cached position of the stage.
+
+        This setter updates the internal `_position` attribute. It does not
+        move the physical stage; for that, use the `move` method.
+
+        Args:
+            position (Union[int, float]): The new position value to cache.
+        """
         self._position = position
 
 
 @define
 class BasePump(BaseInstrument):
-    _volume: Union[float, int] = field(init=False)
-    _flow_rate: Union[float, int] = field(init=False)
+    """
+    Abstract base class for a pump instrument.
+
+    This class extends `BaseInstrument` to define common properties and
+    abstract methods for controlling a pump, such as dispensing liquid
+    at a specified volume and flow rate.
+    """
 
     @cached_property
     def min_volume(self) -> Union[float, int]:
+        """The minimum allowed volume for the pump.
+
+        This value is retrieved from the instrument's configuration settings
+        under the "volume" section and "min_val" key.
+
+        Returns:
+            Union[float, int]: The minimum volume.
+        """
         return self.config.get("volume").get("min_val")
 
     @cached_property
     def max_volume(self) -> Union[float, int]:
+        """The maximum allowed volume for the pump.
+
+        This value is retrieved from the instrument's configuration settings
+        under the "volume" section and "max_val" key.
+
+        Returns:
+            Union[float, int]: The maximum volume.
+        """
         return self.config.get("volume").get("max_val")
 
     @cached_property
     def min_flow_rate(self) -> Union[float, int]:
+        """The minimum allowed flow rate for the pump.
+
+        This value is retrieved from the instrument's configuration settings
+        under the "flow_rate" section and "min_val" key.
+
+        Returns:
+            Union[float, int]: The minimum flow rate.
+        """
         return self.config.get("flow_rate").get("min_val")
 
     @cached_property
     def max_flow_rate(self) -> Union[float, int]:
+        """The maximum allowed flow rate for the pump.
+
+        This value is retrieved from the instrument's configuration settings
+        under the "flow_rate" section and "max_val" key.
+
+        Returns:
+            Union[float, int]: The maximum flow rate.
+        """
         return self.config.get("flow_rate").get("max_val")
 
     @abstractmethod
-    async def pump(self, volume, flow_rate, **kwargs):
-        """Pump a specified volume at a specified flow rate."""
-        pass
+    async def pump(
+        self, volume: Union[float, int], flow_rate: Union[float, int], **kwargs
+    ):
+        """Pump a specified volume at a specified flow rate from inlet to outlet of flowcell.
+
+        This method should be implemented by subclasses to control the physical
+        pump to dispense a given volume of liquid at a particular flow rate.
+
+        Args:
+            volume (Union[float, int]): The volume of liquid to pump.
+            flow_rate (Union[float, int]): The rate at which to pump the liquid.
+            **kwargs: Additional keyword arguments that might be specific to
+                      a particular pump implementation (e.g., pause_time, waste_flow_rate).
+        Returns:
+            bool: True if succesfully pumped volume, otherwise False.
+        """
 
     @abstractmethod
-    async def reverse_pump(self, volume, flow_rate, *kwargs):
-        """Pump a specified volume at a specified flow rate in reverse direction."""
+    async def reverse_pump(
+        self, volume: Union[float, int], flow_rate: Union[float, int], **kwargs
+    ):
+        """Pump a specified volume at a specified flow rate from outlet to inlet of flowcell.
+
+        This method should be implemented by subclasses to control the physical
+        pump to withdraw a given volume of liquid at a particular flow rate.
+
+        Args:
+            volume (Union[float, int]): The volume of liquid to reverse pump.
+            flow_rate (Union[float, int]): The rate at which to reverse pump the liquid.
+            **kwargs: Additional keyword arguments that might be specific to
+                      a particular pump implementation.
+        Returns:
+            bool: True if succesfully pumped volume, otherwise False.
+        """
         pass
 
 
 @define
 class BaseValve(BaseInstrument):
     _port: Union[str, int] = field(init=False)
+    """
+    Abstract base class for a valve instrument.
+
+    This class extends `BaseInstrument` to define common properties and
+    abstract methods for controlling a valve, such as selecting a port
+    and reading the current port.
+
+    Attributes:
+        _port (Union[str, int]): The cached current port of the valve.
+            This attribute is not initialized directly but is set by the `port` setter
+            or `initial_port_value` default.
+    """
 
     @abstractmethod
-    async def select(self, port, **kwargs):
-        """Select port on the valve."""
-        pass
+    async def select(self, port: Union[str, int], **kwargs) -> bool:
+        """Select a specific port on the valve.
+
+        This method should be implemented by subclasses to send commands to the
+        physical valve to switch to the specified port.
+
+        Args:
+            port (Union[str, int]): The identifier of the port to select.
+            **kwargs: Additional keyword arguments that might be specific to
+                      a particular valve implementation (e.g., speed, timeout).
+        Returns:
+            bool: True if succesfull select port, otherwise False.
+        """
 
     @abstractmethod
-    async def current_port(self):
-        """Read current port from valve."""
+    async def current_port(self) -> Union[str, int]:
+        """Read the current active port from the valve.
+
+        This method should be implemented by subclasses to query the physical
+        valve and retrieve its currently selected port.
+
+        Returns:
+            Union[str, int]: The identifier of the current active port.
+        """
         pass
 
     @_port.default
     def initial_port_value(self):
-        return self.ports[0]
+        """Provides the initial default value for the `_port` attribute.
 
-    # @_port.validator
-    # def _validate_port(self, attribute, value):
-    #     if value not in self.ports:
-    #         raise ValueError(f"Port {value} not listed on {self.name}")
+        This method sets the initial cached port to the first port listed
+        in the `ports` cached property (which is derived from the instrument's
+        configuration). Initialize the Valve to this port in concrete subclasses.
+
+        Returns:
+            Union[str, int]: The first valid port from the configuration.
+        """
+        return self.ports[0]
 
     @cached_property
     def ports(self):
+        """A list of valid ports supported by the valve.
+
+        This value is retrieved from the instrument's configuration settings
+        under the "valid_list" key.
+
+        Returns:
+            list[Union[str, int]]: A list of valid port identifiers.
+        """
         return self.config.get("valid_list", [])
 
     @property
     def port(self):
-        """Get current port."""
+        """Get the current cached port of the valve.
+
+        This property provides access to the internally stored port of the valve.
+        It does not query the physical hardware.
+
+        Returns:
+            Union[str, int]: The cached current port of the valve.
+        """
         return self._port
 
     @port.setter
     def port(self, port):
-        """Set current port."""
+        """Set the current cached port of the valve.
+
+        This setter updates the internal `_port` attribute. It does not
+        select the physical port; for that, use the `select` method.
+
+        Args:
+            port (Union[str, int]): The new port value to cache.
+        """
         self._port = port
 
 

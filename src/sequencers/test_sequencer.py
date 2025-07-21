@@ -244,14 +244,6 @@ class TestValve(DumbBaseMethods, BaseValve):
 
     async def select(self, port):
         """Pump a specified volume at a specified flow rate."""
-
-        # if port in self.ports:
-        #     LOGGER.debug(f"{self.name}:: Selecting {port}")
-        #     self.port = port
-        #     return True
-        # else:
-        #     LOGGER.warning(f"{self.name}:: Port {port} not found")
-        #     return False
         LOGGER.debug(f"{self.name}:: Selecting {port}")
         self.port = port
         return True
