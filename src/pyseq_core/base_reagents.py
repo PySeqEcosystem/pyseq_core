@@ -1,4 +1,5 @@
-from typing import Union
+from __future__ import annotations
+from typing import Union, Dict, TYPE_CHECKING
 from attrs import define, field
 from warnings import warn
 from pydantic import BaseModel, create_model, model_validator
@@ -11,6 +12,10 @@ from pyseq_core.base_protocol import (
 )
 import logging
 
+if TYPE_CHECKING:
+    from pyseq_core.base_system import BaseFlowCell
+
+
 LOGGER = logging.getLogger("PySeq")
 
 
@@ -20,8 +25,39 @@ class BaseReagent(BaseModel):
     port: int
     flow_rate: Union[int, float]
 
+    """A reagent used in an experiment.
+
+    This Pydantic model defines the fundamental properties of a reagent,
+    including its associated flowcell, name, valve port, and desired flow rate.
+    It includes validation to ensure the port and flow rate are within
+    acceptable ranges defined in the hardware configuration (`HW_CONFIG`).
+
+    Attributes:
+        flowcell (Union[str, int]): The identifier of the flowcell this reagent
+            is associated with.
+        name (str): The unique name of the reagent.
+        port (int): The valve port number through which this reagent is dispensed.
+        flow_rate (Union[int, float]): The default flow rate for this reagent.
+    """
+
     @model_validator(mode="after")
     def validate_port_flowrate(self):
+        """Validates the reagent's port and flow rate against hardware configuration.
+
+        Ensures that the specified `port` is a valid port for the valve
+        associated with the `flowcell`, and that the `flow_rate` is within
+        the minimum and maximum allowed values for the pump associated with
+        the `flowcell` as defined in `HW_CONFIG`.
+
+        It does not check if the specified `port` is already in use by another reagent.
+
+        Raises:
+            ValueError: If the port is not in the valid list for the valve,
+                        or if the flow rate is outside the min/max range for the pump.
+
+        Returns:
+            BaseReagent: The validated `BaseReagent` instance.
+        """
         validate_in(HW_CONFIG[f"Valve{self.flowcell}"]["valid_list"], self.port)
         validate_min_max("flow_rate", self.flow_rate, HW_CONFIG[f"Pump{self.flowcell}"])
         return self
@@ -29,15 +65,49 @@ class BaseReagent(BaseModel):
 
 @define
 class ReagentsManager:
-    """Class to manage adding, editing, and removing reagents from flowcells."""
+    """Manages the addition, updating, and removal of reagents from flowcells.
 
-    flowcells: dict = field()
+    This class provides a centralized system for maintaining a collection of
+    reagent definitions, organized by flowcell. It includes methods for validating
+    reagent properties like port assignments and flow rates against the
+    system's hardware configuration.
 
-    def reagents(self, flowcell: Union[str, int]) -> dict:
+    Attributes:
+        flowcells (dict): A dictionary where keys are flowcell identifiers (str or int)
+            and values are objects (e.g., `Flowcell` instances) that contain a
+            `reagents` attribute (which is itself a dictionary mapping reagent names
+            to `BaseReagent` objects or their dictionary representations).
+    """
+
+    flowcells: Dict[Union[str, int], BaseFlowCell] = field()
+
+    def reagents(self, flowcell: Union[str, int]) -> Dict[Union[str, int], BaseReagent]:
+        """Retrieves the dictionary of reagents for a specific flowcell.
+
+        Args:
+            flowcell (Union[str, int]): The identifier of the flowcell.
+
+        Returns:
+            dict: A dictionary mapping reagent names (str) to `BaseReagent` objects
+                (or their dictionary representations) for the specified flowcell.
+        """
         return self.flowcells[flowcell].reagents
 
     def get_reagent_key(self, flowcell: Union[str, int], port: int) -> str:
-        """Get reagent name/key by port number, return empty string if not found."""
+        """Gets the reagent name (key) associated with a given port number on a flowcell.
+
+        Args:
+            flowcell (Union[str, int]): The identifier of the flowcell.
+            port (int): The port number to look up.
+
+        Returns:
+            str: The name of the reagent mapped to the port, or an empty string
+                if no reagent is found for that port.
+
+        Raises:
+            ValueError: If more than one reagent is mapped to the same port
+                on the specified flowcell, indicating a configuration error.
+        """
         reagents = self.reagents(flowcell)
         key = list(filter(lambda k: reagents[k]["port"] == port, reagents))
         if len(key) > 1:
@@ -47,7 +117,23 @@ class ReagentsManager:
         return "".join(key)
 
     def check_port(self, flowcell: Union[str, int], reagent: BaseReagent) -> bool:
-        """Check reagent name and port number not already used."""
+        """Checks if a reagent's name or port number is already in use on a flowcell.
+
+        This method performs two checks:
+        1.  If the `reagent.name` already exists in the flowcell's reagents.
+        2.  If `reagent.port` is already used by another reagent on the same flowcell.
+
+        Args:
+            flowcell (Union[str, int]): The identifier of the flowcell.
+            reagent (BaseReagent): The `BaseReagent` object to check.
+
+        Returns:
+            bool: True if both the reagent name and port are available (not used),
+                False otherwise.
+
+        Warns:
+            UserWarning: If the reagent name or port is found to be a duplicate.
+        """
 
         # Check reagent name is not already listed
         reagents = self.reagents(flowcell)
@@ -73,13 +159,45 @@ class ReagentsManager:
     def check_flow_rate(
         self, flowcell: Union[str, int], flow_rate: Union[int, float]
     ) -> bool:
-        """Check reagent flow rate"""
+        """Checks if a given flow rate is within the valid range for the pump on a flowcell.
+
+        This method uses `validate_min_max` to ensure the `flow_rate` adheres
+        to the hardware configuration limits for the pump associated with the
+        specified `flowcell`.
+
+        Args:
+            flowcell (Union[str, int]): The identifier of the flowcell.
+            flow_rate (Union[int, float]): The flow rate to validate.
+
+        Returns:
+            bool: True if the flow rate is valid.
+
+        Raises:
+            ValueError: If the flow rate is outside the min/max range defined
+                in `HW_CONFIG` for the corresponding pump.
+        """
         # Validate flow rates
         validate_min_max("flow_rate", flow_rate, HW_CONFIG[f"Pump{flowcell}"])
         return True
 
-    def add(self, reagent: BaseReagent = None, **kwargs):
-        """Add reagent to flowcell."""
+    def add(
+        self, reagent: BaseReagent = None, **kwargs
+    ) -> Dict[Union[str, int], BaseReagent]:
+        """Adds a reagent to a specific flowcell.
+
+        If a `reagent` object is provided, it is added directly after validation.
+        Otherwise, a new `BaseReagent` object is created from `kwargs` and then added.
+        The reagent is only added if its name and port are not already in use.
+
+        Args:
+            reagent (BaseReagent, optional): An existing `BaseReagent` object to add.
+                If None, a new reagent will be created using `kwargs`. Defaults to None.
+            **kwargs: Keyword arguments used to create a new `BaseReagent` if `reagent`
+                is None. These are passed directly to the `BaseReagent` constructor.
+
+        Returns:
+            dict: The updated dictionary of reagents for the target flowcell.
+        """
 
         if reagent is None:
             reagent = BaseReagent(**kwargs)
@@ -93,8 +211,34 @@ class ReagentsManager:
 
         return self.reagents(flowcell)
 
-    def update(self, reagent: BaseReagent = None, **kwargs) -> dict:
-        """Update exisiting reagent parameters."""
+    def update(
+        self, reagent: BaseReagent = None, **kwargs
+    ) -> Dict[Union[str, int], BaseReagent]:
+        """Updates an existing reagent's parameters on a flowcell.
+
+        This method allows for updating a reagent identified either by an
+        existing `BaseReagent` object or by its name/port via `kwargs`.
+        It handles changes to reagent name, port, flow rate, and other
+        custom parameters, performing validation where applicable.
+
+        Args:
+            reagent (BaseReagent, optional): An existing `BaseReagent` object
+                with updated parameters. If None, the reagent to update is
+                identified and updated using `kwargs`. Defaults to None.
+            **kwargs: Keyword arguments containing the `flowcell`, `name` (required
+                if `reagent` is None), and optionally `port` (if identifying by port)
+                and other parameters to update.
+
+        Returns:
+            dict: The updated dictionary of reagents for the target flowcell.
+
+        Raises:
+            AssertionError: If `name` and `flowcell` are not specified in `kwargs`
+                            when `reagent` is None.
+            ValueError: If no existing reagent is found with the specified name or port,
+                        or if a new port conflicts with existing mappings.
+            UserWarning: If a duplicate reagent name or port conflict occurs during update.
+        """
 
         if reagent is None:
             assert "name" in kwargs, "name must be specified"
@@ -162,7 +306,20 @@ class ReagentsManager:
 
         return reagents
 
-    def remove(self, flowcell: Union[str, int], reagent_name: str) -> dict:
+    def remove(
+        self, flowcell: Union[str, int], reagent_name: str
+    ) -> Dict[Union[str, int], BaseReagent]:
+        """Removes a reagent from a specific flowcell.
+
+        Args:
+            flowcell (Union[str, int]): The identifier of the flowcell from which
+                to remove the reagent.
+            reagent_name (str): The name of the reagent to remove.
+
+        Returns:
+            dict: The updated dictionary of reagents for the target flowcell
+                after removal.
+        """
         reagents = self.reagents(flowcell)
 
         if reagent_name in reagents:
@@ -171,6 +328,25 @@ class ReagentsManager:
         return reagents
 
     def add_from_config(self, flowcell: Union[str, int], config: dict):
+        """Adds reagents to a flowcell based on a configuration dictionary.
+
+        This method reads reagent definitions from a provided configuration,
+        dynamically creates `Reagent` objects (potentially with extra pump
+        parameters), and adds them to the manager. It supports different
+        formats for reagent definitions within the config.
+
+        Args:
+            flowcell (Union[str, int]): The identifier of the flowcell to which
+                reagents will be added.
+            config (dict): A dictionary containing reagent definitions.
+                Expected structure:
+                `config["pump"]` for extra pump parameters.
+                `config["reagents"]` for reagent definitions.
+                Reagent definitions can be:
+                - `reagent_name: port_number` (int)
+                - `reagent_name: {port: port_number, flow_rate: flow_rate, ...}` (dict)
+        """
+
         # Custom Reagent class with extra pump parameters
         ExtraPumpParams = create_model(
             "ExtraPumpParams", **custom_params(config["pump"])
