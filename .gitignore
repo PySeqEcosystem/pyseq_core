@@ -216,3 +216,6 @@ personal_notebooks
 personal_scripts
 *.DS_Store
 
+# setuptools_scm package version
+src/_version.py
+
