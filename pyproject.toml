@@ -8,13 +8,12 @@ dynamic = ["version"]
 authors = [
   { name="Kunal Pandit", email="kpandit@nygenome.org" },
 ]
-description = "Core Pacakage for Open Source Control Software to Control Sequencers."
+description = "Core Package for Open Source Control Software to Control Sequencers."
 readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
 ]
 dependencies = [
   "pydantic>=2.11.7",
@@ -27,8 +26,6 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/pypa/sampleproject"
 Issues = "https://github.com/pypa/sampleproject/issues"
-
-[tool.setuptools_scm]
 version_file = "src/_version.py"
 
 [project.optional-dependencies]

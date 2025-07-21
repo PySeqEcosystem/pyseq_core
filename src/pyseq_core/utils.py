@@ -7,12 +7,11 @@ import logging
 import logging.config  # Need to import, or I get an AttributeError?
 import logging.handlers
 import datetime
-# from pyseq_core.base_instruments import BaseCOM
 
 LOGGER = logging.getLogger("PySeq")
 
 # Local machine specific settings
-MACHINE_SETTINGS_PATH = Path.home() / ".config/pyseq2500/machine_settings.yaml"
+MACHINE_SETTINGS_PATH = Path.home() / ".config/pyseq/machine_settings.yaml"
 if not MACHINE_SETTINGS_PATH.exists():
     # Use settings from package if local machine setting do not exist
     MACHINE_SETTINGS_PATH = importlib.resources.files("pyseq_core").joinpath(
@@ -43,7 +42,7 @@ if os.environ.get("PYTEST_VERSION") is not None and (
         HW_CONFIG = all_settings[machine_name]
 else:
     # use default experiment config and machine settings from local machine
-    DEFAULT_CONFIG_PATH = Path.home() / ".config/pyseq2500/default.toml"
+    DEFAULT_CONFIG_PATH = Path.home() / ".config/pyseq/default.toml"
 
 
 # Read default config and machine settings
@@ -103,7 +102,7 @@ def update_logger(logger_conf: dict, rotating: bool = False):
         del logger_conf["handlers"]["rotatingHandler"]
 
     logger_conf["loggers"]["PySeq"]["handlers"] = list(logger_conf["handlers"].keys())
-    # Need to import logging.config ?
+    # Need to import logging.config or get an AttributeError, not sure why.
     logging.config.dictConfig(logger_conf)
 
 

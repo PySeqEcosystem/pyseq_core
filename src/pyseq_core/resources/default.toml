@@ -60,7 +60,7 @@ stream = "ext://sys.stdout"
 class = "logging.handlers.TimedRotatingFileHandler"
 level = "DEBUG"
 formatter = "long"
-filename = "~/.config/pyseq2500/logs/pyseq.log"
+filename = "~/.config/pyseq/logs/pyseq.log"
 when = "midnight"
 backupCount = 10
 
