@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pathlib import Path
 import tomlkit
 import yaml
@@ -5,13 +6,28 @@ import os
 import importlib
 import logging
 import logging.config  # Need to import, or I get an AttributeError?
-import logging.handlers
 import datetime
+from pyseq_core.base_com import BaseCOM
+
 
 LOGGER = logging.getLogger("PySeq")
+"""Logger instance for the PySeq application."""
 
+# --- MACHINE_SETTINGS Configuration ---
+# This section handles the loading of machine-specific hardware configurations.
 # Local machine specific settings
 MACHINE_SETTINGS_PATH = Path.home() / ".config/pyseq/machine_settings.yaml"
+"""Path to the machine-specific hardware configuration YAML file.
+
+This YAML file stores hardware configurations and settings for all the
+instrumentation in the sequencer. Multiple sequencers or versions can be
+stored in one file. The top-level key `name` specifies which sequencer or
+version to use, and its corresponding settings are loaded into `HW_CONFIG`.
+
+If the file does not exist at `~/.config/pyseq/machine_settings.yaml`,
+settings from the `pyseq_core` package resources will be used as a fallback.
+"""
+
 if not MACHINE_SETTINGS_PATH.exists():
     # Use settings from package if local machine setting do not exist
     MACHINE_SETTINGS_PATH = importlib.resources.files("pyseq_core").joinpath(
@@ -22,14 +38,32 @@ with open(MACHINE_SETTINGS_PATH, "r") as f:
     all_settings = yaml.safe_load(f)  # Machine config
     machine_name = all_settings["name"]
     HW_CONFIG = all_settings[machine_name]
+"""Dictionary containing the hardware configuration for the currently selected machine.
+
+This is loaded from the `MACHINE_SETTINGS_PATH` YAML file, specifically the
+section identified by the `name` key in that file.
+"""
+
+"""MACHINE_SETTINGS at ~/.config/pyseq/machine_settings.yaml
+
+   This YAML file store hardware configurations and settings for all the 
+   instrumentation in the sequencer.
+   Multiple sequencers or versions can be stored in 1 file.
+   The top level key `name` specifies which sequencer or version to use. 
+
+   If the file does not exist, settings from repository will be used.  
+"""
+
+# --- DEFAULT_CONFIG Configuration ---
+# This section handles the loading of default experiment/software configurations.
 
 # Default settings for experiment/software
 machine_name = machine_name.lower()
 if os.environ.get("PYTEST_VERSION") is not None and (
-    "test" not in machine_name or "virtual" not in machine_name
+    "test" in machine_name or "virtual" in machine_name
 ):
-    LOGGER.info("Using package default.toml")
     # use default experiment config and machine settings from package resources
+    LOGGER.info("Using package default.toml")
     resource_path = importlib.resources.files("pyseq_core")
     DEFAULT_CONFIG_PATH = resource_path.joinpath("resources/default.toml")
     MACHINE_SETTINGS_PATH = resource_path.joinpath("resources/machine_settings.yaml")
@@ -43,14 +77,36 @@ if os.environ.get("PYTEST_VERSION") is not None and (
 else:
     # use default experiment config and machine settings from local machine
     DEFAULT_CONFIG_PATH = Path.home() / ".config/pyseq/default.toml"
+"""Path to the default experiment configuration TOML file.
 
+If `PYTEST_VERSION` environment variable is set and the machine name
+contains "test" or "virtual", the default configuration from the `pyseq_core`
+package resources is used. Otherwise, it defaults to `~/.config/pyseq/default.toml`.
+"""
 
 # Read default config and machine settings
 DEFAULT_CONFIG = tomlkit.parse(open(DEFAULT_CONFIG_PATH).read())
+"""Dictionary containing the default experiment and software configuration.
+
+This is loaded from the `DEFAULT_CONFIG_PATH` TOML file.
+"""
 
 
-def deep_merge(src_dict, dst_dict):
-    """Recursive dict merge."""
+def deep_merge(src_dict: dict, dst_dict: dict) -> dict:
+    """Recursively merges a source dictionary into a destination dictionary.
+
+    If a key exists in both dictionaries and both values are dictionaries,
+    the merge operation is performed recursively on those nested dictionaries.
+    Otherwise, the value from the source dictionary overwrites the value
+    in the destination dictionary.
+
+    Args:
+        src_dict (dict): The source dictionary whose contents will be merged.
+        dst_dict (dict): The destination dictionary into which `src_dict` will be merged.
+
+    Returns:
+        dict: The modified destination dictionary after the merge operation.
+    """
 
     for k, v in src_dict.items():
         if k in dst_dict and isinstance(dst_dict[k], dict) and isinstance(v, dict):
@@ -62,7 +118,25 @@ def deep_merge(src_dict, dst_dict):
 
 
 def setup_experiment_path(exp_config: dict, exp_name: str) -> dict:
-    """Set up paths for imaging & focusing."""
+    """Sets up and creates output paths for experiment data.
+
+    This function configures paths for images, focus data, and logs based on
+    the provided experiment configuration and name. It ensures that the
+    necessary directories are created and updates the `exp_config` dictionary
+    with the absolute paths. It also updates the logger's file handler filename.
+
+    Args:
+        exp_config (dict): The experiment configuration dictionary.
+            Expected to contain an "experiment" key with "name", "output_path",
+            "images_path", "focus_path", and "log_path" subkeys.
+            Also expects a "logging" key with "handlers" and "fileHandler" subkeys.
+        exp_name (str): The desired name for the experiment. If empty, the name
+            from `exp_config["experiment"]["name"]` is used. If that is also empty,
+            a default name based on the current date is generated.
+
+    Returns:
+        dict: The updated experiment configuration dictionary with resolved paths.
+    """
 
     # Get experiment name
     if len(exp_name) == 0:
@@ -90,6 +164,20 @@ def setup_experiment_path(exp_config: dict, exp_name: str) -> dict:
 
 
 def update_logger(logger_conf: dict, rotating: bool = False):
+    """Updates the logging configuration based on the `rotating` flag.
+
+    This function modifies the provided logger configuration dictionary.
+    If `rotating` is True, it configures a `RotatingFileHandler` and removes
+    the standard `FileHandler`. If `rotating` is False, it removes the
+    `RotatingFileHandler` and assumes a standard `FileHandler` is used.
+    Finally, it applies the updated configuration using `logging.config.dictConfig`.
+
+    Args:
+        logger_conf (dict): The logging configuration dictionary, typically
+            loaded from a configuration file.
+        rotating (bool, optional): If True, configures a rotating file handler.
+            If False, configures a standard file handler. Defaults to False.
+    """
     if rotating:
         # Remove FileHandler if running tests or idleing
         del logger_conf["handlers"]["fileHandler"]
@@ -106,7 +194,24 @@ def update_logger(logger_conf: dict, rotating: bool = False):
     logging.config.dictConfig(logger_conf)
 
 
-def map_coms(com_class):
+def map_coms(com_class: BaseCOM):
+    """Maps instrument names to their communication instances.
+
+    This function iterates through the `HW_CONFIG` to identify instruments
+    that have an "address". It then creates or reuses instances of `com_class`
+    for these addresses, ensuring that multiple instruments sharing the same
+    physical communication address (e.g., a serial port) share the same
+    communication object.
+
+    Args:
+        com_class (BaseCOM): The class to instantiate for communication objects.
+            This class is expected to be a concrete implementation of `BaseCOM`
+            and take an address as its constructor argument.
+
+    Returns:
+        dict: A dictionary where keys are instrument names (or communication addresses
+            if an instrument shares an address) and values are instances of `com_class`.
+    """
     _coms = {}
     for instrument, values in HW_CONFIG.items():
         if "address" in values:
@@ -115,12 +220,17 @@ def map_coms(com_class):
     coms = {}
     for instrument, address in _coms.items():
         if address in coms:
+            # If the address already has a COM object, assign it to this instrument
             coms[instrument] = coms[address]
         elif address in _coms:
+            # If the address is also an instrument name (e.g., 'COM1': {'address': 'COM1'}),
+            # create a new COM object for the address and assign it to both.
             coms[address] = com_class(address)
             coms[instrument] = coms[address]
         elif instrument in coms:
+            # If the instrument already has a COM object (e.g., from a previous alias), do nothing
             pass
         else:
+            # If neither the address nor the instrument is already mapped, create a new COM object
             coms[instrument] = com_class(address)
     return coms

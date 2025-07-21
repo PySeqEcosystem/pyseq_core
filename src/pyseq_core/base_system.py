@@ -303,8 +303,6 @@ class BaseSystem(ABC):
 class BaseMicroscope(BaseSystem):
     name: str = field(default="microscope")
     lock_condition: asyncio.Lock = field(factory=asyncio.Lock)
-    # image_path: Dict[str, Path] = field(factory=dict)
-    # focus_path: Dict[str, Path] = field(factory=dict)
 
     @property
     def YStage(self) -> BaseYStage:

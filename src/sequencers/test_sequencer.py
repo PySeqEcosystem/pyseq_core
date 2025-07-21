@@ -15,8 +15,8 @@ from pyseq_core.base_instruments import (
     BasePump,
     BaseValve,
     BaseTemperatureController,
-    BaseCOM,
 )
+from pyseq_core.utils import BaseCOM
 from typing import Literal
 from attrs import define, field
 import logging
@@ -29,9 +29,6 @@ LOGGER = logging.getLogger("PySeq")
 @define
 class TestCOM(BaseCOM):
     open: bool = field(default=False)
-    # def __init__(self, address):
-    #     super().__init__(address=address)
-    # self.open = False
 
     async def connect(self):
         async with self.lock:
@@ -46,6 +43,11 @@ class TestCOM(BaseCOM):
         """Send a command to the instrument."""
         async with self.lock:
             LOGGER.debug(f"{self.name}: Tx: {command}")
+
+    async def close(self):
+        async with self.lock:
+            LOGGER.debug(f"Closing connection to {self.address}")
+            return True
 
 
 class DumbBaseMethods:
