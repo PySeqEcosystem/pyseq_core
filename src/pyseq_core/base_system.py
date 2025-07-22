@@ -1,3 +1,4 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from pyseq_core.utils import (
     DEFAULT_CONFIG,
@@ -41,7 +42,7 @@ from pyseq_core.base_protocol import (
 )
 from pyseq_core.reservation_system import ReservationSystem, reserve_microscope
 from pyseq_core.roi_manager import ROIManager, read_roi_config
-from typing import Dict, Union, List, Coroutine, Literal
+from typing import Dict, Union, List, Coroutine, Literal, Type
 from attrs import define, field
 from pydantic import ValidationError
 from functools import cached_property
@@ -54,6 +55,7 @@ import logging
 LOGGER = logging.getLogger("PySeq")
 
 PumpCommand = PumpCommandFactory.factory(DEFAULT_CONFIG)
+PumpCommandType = Type[PumpCommand]
 
 
 # class PumpCommand(DefaultPump):
@@ -61,6 +63,7 @@ PumpCommand = PumpCommandFactory.factory(DEFAULT_CONFIG)
 
 
 ROI = ROIFactory.factory(DEFAULT_CONFIG)
+ROIType = Type[ROI]
 
 
 # class ROI(DefaultROI):
@@ -362,17 +365,17 @@ class BaseMicroscope(BaseSystem):
         pass
 
     @abstractmethod
-    async def _scan(self, roi: "ROI"):
+    async def _scan(self, roi: ROIType):
         """Perform a scan over the specified region of interest (ROI)."""
         pass
 
     @abstractmethod
-    async def _expose_scan(self, roi: "ROI", duration: Union[float, int]):
+    async def _expose_scan(self, roi: ROIType, duration: Union[float, int]):
         """Scan over the specified region of interest (ROI) with laser."""
         pass
 
     @abstractmethod
-    async def _move(self, roi: "ROI"):
+    async def _move(self, roi: ROIType):
         """Move the stage ROI x,y,z coordinates."""
         pass
 
@@ -384,14 +387,14 @@ class BaseMicroscope(BaseSystem):
         pass
 
     @abstractmethod
-    async def _find_focus(self, roi: "ROI"):
+    async def _find_focus(self, roi: ROIType):
         """Async set the parameters for the ROI."""
         # Reset stage to initial position after finding focus
         pass
 
     @reserve_microscope
     async def _from_flowcell(
-        self, routine: Literal["image", "focus", "expose"], roi: List[ROI]
+        self, routine: Literal["image", "focus", "expose"], roi: List[ROIType]
     ):
         for r in roi:
             if routine in "image":
@@ -402,19 +405,19 @@ class BaseMicroscope(BaseSystem):
                 self.expose(r)
         await self._queue.join()
 
-    async def _focus(self, roi: "ROI"):
+    async def _focus(self, roi: ROIType):
         """Async find focus on roi."""
         await self._set_parameters(roi, "focus")
         await self._find_focus(roi)
 
-    async def _expose(self, roi: "ROI"):
+    async def _expose(self, roi: ROIType):
         """Async expose the sample for a specified duration without imaging."""
 
         await self._move(roi.stage)
         await self._set_parameters(roi, "expose")
         await self._expose_scan(roi)
 
-    async def _image(self, roi: "ROI") -> None:
+    async def _image(self, roi: ROIType) -> None:
         """Async image ROIs."""
 
         await self._move(roi.stage)
@@ -424,17 +427,17 @@ class BaseMicroscope(BaseSystem):
         await self._set_parameters(roi, "image")
         await self._scan(roi)
 
-    def image(self, roi: ROI) -> None:
+    def image(self, roi: ROIType) -> None:
         """Acquire image from the specified region of interest (ROI)."""
         description = f"Image {roi.name}"
         return self.add_task(description, self._image, roi)
 
-    def expose(self, roi: ROI) -> None:
+    def expose(self, roi: ROIType) -> None:
         """Expose the sample to light without imaging."""
         description = f"Expose {roi.name}"
         return self.add_task(description, self._expose, roi)
 
-    def focus(self, roi: ROI) -> None:
+    def focus(self, roi: ROIType) -> None:
         """Autofocus on ROI."""
         description = f"Focusing on {roi.name}"
         return self.add_task(description, self._focus, roi)
@@ -451,7 +454,7 @@ class BaseMicroscope(BaseSystem):
 
 
 def listerize_roi(func):
-    def wrap(self, roi: Union[ROI, List[ROI]] = []):
+    def wrap(self, roi: Union[ROIType, List[ROIType]] = []):
         if not isinstance(roi, list):
             roi = [roi]
         if len(roi) == 0:
@@ -564,19 +567,19 @@ class BaseFlowCell(BaseSystem):
         )
 
     @listerize_roi
-    def image(self, roi: Union[ROI, List[ROI]] = []) -> int:
+    def image(self, roi: Union[ROIType, List[ROIType]] = []) -> int:
         """Image specified ROIs or all ROIs on flowcell (default)."""
         description = f"Image {len(roi)} ROIs"
         self.add_task(description, self._roi_to_microscope, "image", roi)
 
     @listerize_roi
-    def focus(self, roi: Union[ROI, List[ROI]] = []) -> int:
+    def focus(self, roi: Union[ROIType, List[ROIType]] = []) -> int:
         """Focus on specified ROIs or all ROIs on flowcell (default)."""
         description = f"Focus on {len(roi)} ROIs"
         self.add_task(description, self._roi_to_microscope, "focus", roi)
 
     @listerize_roi
-    def expose(self, roi: Union[ROI, List[ROI]] = []) -> int:
+    def expose(self, roi: Union[ROIType, List[ROIType]] = []) -> int:
         """Expose specified ROIs or all ROIs on flowcell (default)."""
         description = f"Expose {len(roi)} ROIs"
         self.add_task(description, self._roi_to_microscope, "expose", roi)
@@ -627,7 +630,7 @@ class BaseFlowCell(BaseSystem):
 def get_roi(func):
     def wrap(
         self,
-        roi: Union[ROI, List[ROI]] = [],
+        roi: Union[ROIType, List[ROIType]] = [],
         flowcells: Union[str, List[str]] = None,
         **kwargs,
     ):
@@ -703,7 +706,7 @@ class BaseSequencer(BaseSystem):
     def pump(
         self,
         flowcells: Union[str, int] = None,
-        pump_command: PumpCommand = None,
+        pump_command: PumpCommandType = None,
         **kwargs,
     ):
         """Pump volume in uL from/to specified port at flow rate in ul/min on specified flow cell."""
@@ -788,7 +791,7 @@ class BaseSequencer(BaseSystem):
     @get_roi
     def image(
         self,
-        roi: Union[ROI, List[ROI]] = [],
+        roi: Union[ROIType, List[ROIType]] = [],
         flowcells: Union[str, List[str]] = None,
         **kwargs,
     ):
@@ -798,7 +801,7 @@ class BaseSequencer(BaseSystem):
     @get_roi
     def focus(
         self,
-        roi: Union[ROI, List[ROI]] = [],
+        roi: Union[ROIType, List[ROIType]] = [],
         flowcells: Union[str, List[str]] = None,
         **kwargs,
     ):
@@ -808,7 +811,7 @@ class BaseSequencer(BaseSystem):
     @get_roi
     def expose(
         self,
-        roi: Union[ROI, List[ROI]] = [],
+        roi: Union[ROIType, List[ROIType]] = [],
         flowcells: Union[str, List[str]] = None,
         **kwargs,
     ):
@@ -1047,5 +1050,5 @@ class BaseSequencer(BaseSystem):
                             self.expose(flowcells=flowcell)
 
     @abstractmethod
-    def custom_roi_factory(name: str, flowcell: Union[str, int], **kwargs) -> ROI:
+    def custom_roi_factory(name: str, flowcell: Union[str, int], **kwargs) -> ROIType:
         pass

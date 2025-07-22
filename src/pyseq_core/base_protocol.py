@@ -328,7 +328,7 @@ BaseOpticsParams = Type[OpticsParams]
 
 
 class ImageParams(BaseModel):
-    optics: OpticsParams
+    optics: OpticsParams  # type: ignore
     output: DirectoryPath
     nz: int
 
@@ -356,8 +356,8 @@ class ImageParams(BaseModel):
 
 
 class FocusParams(BaseModel):
-    optics: OpticsParams
-    routine: Literal[*DEFAULT_CONFIG["auto_focus_routines"]["routines"]]
+    optics: OpticsParams  # type: ignore
+    routine: Literal[*DEFAULT_CONFIG["auto_focus_routines"]["routines"]]  # type: ignore
     output: DirectoryPath
     z_focus: Union[int, float] = -1
 
@@ -388,7 +388,7 @@ class FocusParams(BaseModel):
 
 
 class ExposeParams(BaseModel):
-    optics: OpticsParams
+    optics: OpticsParams  # type: ignore
     n_exposures: int
 
     @classmethod
@@ -422,7 +422,7 @@ class ROIFactory:
         StagePosition = StageFactory.factory(exp_config)
 
         class ROI(BaseROI):
-            stage: StagePosition
+            stage: StagePosition  # type: ignore
             image: ImageParams = ImageParams.factory(exp_config)
             focus: FocusParams = FocusParams.factory(exp_config)
             expose: ExposeParams = ExposeParams.factory(exp_config)
