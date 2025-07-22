@@ -1,6 +1,6 @@
 from __future__ import annotations
 from attrs import define, field
-from pyseq_core.base_protocol import BaseROIFactory
+from pyseq_core.base_protocol import ROIFactory
 from pyseq_core.utils import DEFAULT_CONFIG  # #HW_CONFIG, deep_merge
 
 from warnings import warn
@@ -15,11 +15,11 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger("PySeq")
 
 
-_DefaultROI = BaseROIFactory(DEFAULT_CONFIG)
+DefaultROI = ROIFactory.factory(DEFAULT_CONFIG)
 
 
-class DefaultROI(_DefaultROI):
-    pass
+# class DefaultROI(_DefaultROI):
+#     pass
 
 
 def read_roi_config(
@@ -108,7 +108,7 @@ def read_roi_config(
     roi_config = tomlkit.parse(open(config_path).read())
 
     if exp_config is not None:
-        ROI = BaseROIFactory(exp_config)
+        ROI = ROIFactory.factory(exp_config)
     else:
         ROI = DefaultROI
 
@@ -181,7 +181,7 @@ class ROIManager:
         """
 
         if exp_config is not None:
-            ROI = BaseROIFactory(exp_config)
+            ROI = ROIFactory.factory(exp_config)
         else:
             ROI = DefaultROI
 

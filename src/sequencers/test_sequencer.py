@@ -1,5 +1,5 @@
 from pyseq_core.base_system import BaseFlowCell, BaseMicroscope, BaseSequencer, ROI
-from pyseq_core.base_protocol import Optics
+from pyseq_core.base_protocol import BaseOpticsParams
 from pyseq_core.utils import map_coms
 
 # from pyseq_core.baseROI import BaseROI, TestROI
@@ -383,7 +383,7 @@ class TestMicroscope(BaseMicroscope):
         )
 
     async def _set_parameters(
-        self, params: Optics, mode: Literal["image", "focus", "expose"]
+        self, params: BaseOpticsParams, mode: Literal["image", "focus", "expose"]
     ):
         """Set the parameters to expose/image the ROI."""
 

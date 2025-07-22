@@ -21,14 +21,14 @@ from pyseq_core.base_instruments import (
 )
 from pyseq_core.base_reagents import ReagentsManager
 from pyseq_core.base_protocol import (
-    Optics,
+    BaseOpticsParams,
     HoldCommand,
     WaitCommand,
     TemperatureCommand,
 )
 from pyseq_core.base_protocol import (
-    BaseROIFactory,
-    SimpleStageFactory,
+    ROIFactory,
+    SimpleStageType,
     PumpCommandFactory,
 )
 from pyseq_core.base_protocol import (
@@ -59,18 +59,19 @@ class PumpCommand(DefaultPump):
     pass
 
 
-DefaultROI = BaseROIFactory(DEFAULT_CONFIG)
+ROI = ROIFactory.factory(DEFAULT_CONFIG)
 
 
-class ROI(DefaultROI):
-    pass
+# class ROI(DefaultROI):
+#     pass
+
+# SimpleStage = SimpleStageFactory.factory(DEFAULT_CONFIG)
+# SimpleStage = SimpleStageFactory.factory(DEFAULT_CONFIG)
+# DefaultSimpleStage = SimpleStageFactory(DEFAULT_CONFIG)
 
 
-DefaultSimpleStage = SimpleStageFactory(DEFAULT_CONFIG)
-
-
-class SimpleStage(DefaultSimpleStage):
-    pass
+# class SimpleStage(DefaultSimpleStage):
+#     pass
 
 
 @define(kw_only=True)
@@ -376,7 +377,7 @@ class BaseMicroscope(BaseSystem):
 
     @abstractmethod
     async def _set_parameters(
-        self, image_params: Optics, mode: Literal["image", "focus", "expose"]
+        self, image_params: BaseOpticsParams, mode: Literal["image", "focus", "expose"]
     ):
         """Async set the parameters for the ROI."""
         pass
@@ -437,12 +438,12 @@ class BaseMicroscope(BaseSystem):
         description = f"Focusing on {roi.name}"
         return self.add_task(description, self._focus, roi)
 
-    def move(self, stage: SimpleStage) -> None:
+    def move(self, stage: SimpleStageType) -> None:
         """Move the stage ROI x,y,z coordinates."""
         description = f"Move x:{stage.x}, y:{stage.y}, z:{stage.z}"
-        return self.add_task(description, self._move, SimpleStage)
+        return self.add_task(description, self._move, stage)
 
-    def set_parameters(self, roi_params: Optics) -> None:
+    def set_parameters(self, roi_params: BaseOpticsParams) -> None:
         """Set the laser power, filters, exposure, imaging mode, etc. for a specified region of interest (ROI)."""
         description = "Setting parameters"
         return self.add_task(description, self._set_parameters, roi_params)
@@ -932,7 +933,11 @@ class BaseSequencer(BaseSystem):
         exp_config = read_user_config(exp_config_path)
         # Set up paths for imaging, focusin, and logging and update exp_config
         exp_config = setup_experiment_path(exp_config, exp_name)
-        update_logger(exp_config["logging"], exp_config["ROTATE_LOGS"])
+        (
+            update_logger(
+                exp_config["logging"], exp_config["rotate_logs"]["rotate_logs"]
+            ),
+        )
 
         # Reset rois and reagents
         flowcells = self._get_fc_list(fc_names)

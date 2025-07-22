@@ -14,12 +14,25 @@ imaging = {port=10, flow_rate=100, pause_time=10}
 
 [image]
 nz = 1
+[image.optics]
+power.red = 200
+power.green = 200
+filter.red = "open"
+filter.green = "open"
 
 [expose]
 n_exposures = 0
+[expose.optics]
+power.green = 200
+filter.green = "open"
 
 [focus]
-routine = "partial_once" 
+routine = "partial once" 
+[focus.optics]
+power.red = 25
+power.green = 25
+filter.red = "open"
+filter.green = "open"
 
 [stage]
 tilt1 = 21500  

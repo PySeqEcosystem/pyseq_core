@@ -16,7 +16,7 @@ nz = 0
 n_exposures = 0
 
 [focus]
-routine = "partial_once" 
+routine = "partial once" 
 
 [stage]
 tilt1 = 21500  
@@ -48,7 +48,7 @@ datefmt = "%m-%d %H:%M"
 
 [logging.formatters.long]
 format = "%(asctime)s | %(name)s - %(levelname)s - %(message)s"
-datefmt = "%Y%m%d %H:%M:%S"
+datefmt = "%Y%m%d %H:%M:%Ss"
 
 [logging.handlers.consoleHandler]
 class = "logging.StreamHandler"
@@ -79,4 +79,8 @@ propagate = false
 level = "WARNING"
 handlers = ["consoleHandler"]
 
-ROTATE_LOGS = false                                                             # flag to rotate logs during testing or idleing
+[auto_focus_routines]
+routines = ["full", "full_once", "partial", "partial once"]
+
+[rotate_logs]
+rotate_logs = false                                                             # flag to rotate logs during testing or idleing
