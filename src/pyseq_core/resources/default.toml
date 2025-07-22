@@ -11,12 +11,15 @@ protocol_path = ""
 
 [image]
 nz = 0
+[image.optics]
 
 [expose]
 n_exposures = 0
+[expose.optics]
 
 [focus]
 routine = "partial once" 
+[focus.optics]
 
 [stage]
 tilt1 = 21500  

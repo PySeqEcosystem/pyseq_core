@@ -13,7 +13,7 @@ imager = {port=11, flow_rate=100}
 imaging = {port=10, flow_rate=100, pause_time=10}
 
 [image]
-nz = 1
+nz = 2
 [image.optics]
 power.red = 200
 power.green = 200

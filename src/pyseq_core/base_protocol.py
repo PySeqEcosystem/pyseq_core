@@ -334,7 +334,7 @@ class ImageParams(BaseModel):
 
     @classmethod
     def factory(cls, exp_config: dict) -> Self:
-        optics = OpticsParams(**exp_config["image"])
+        optics = OpticsParams(**exp_config["image"]["optics"])
         output = exp_config["experiment"].get("images_path", ".")
         nz = exp_config["image"]["nz"]
         return cls(optics=optics, output=output, nz=nz)
@@ -363,7 +363,7 @@ class FocusParams(BaseModel):
 
     @classmethod
     def factory(cls, exp_config: dict = {}) -> Self:
-        optics = OpticsParams(**exp_config["focus"])
+        optics = OpticsParams(**exp_config["focus"]["optics"])
         routine = exp_config["focus"]["routine"]
         output = exp_config["experiment"]["focus_path"]
 
@@ -393,7 +393,7 @@ class ExposeParams(BaseModel):
 
     @classmethod
     def factory(cls, exp_config: dict = {}) -> Self:
-        optics = OpticsParams(**exp_config["expose"])
+        optics = OpticsParams(**exp_config["expose"]["optics"])
         n_exposures = exp_config["expose"]["n_exposures"]
         return cls(optics=optics, n_exposures=n_exposures)
 
@@ -747,7 +747,6 @@ def check_image(
         dict_focus = FocusParams.factory(defaults).model_dump()
         dict_command.update({"focus": dict_focus})
         # deep_merge(dict_focus["optics"], dict_command["focus"]["optics"])
-
     return dict_command
 
 

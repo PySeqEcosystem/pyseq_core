@@ -361,17 +361,17 @@ class BaseMicroscope(BaseSystem):
         pass
 
     @abstractmethod
-    async def _scan(self, roi: ROI):
+    async def _scan(self, roi: "ROI"):
         """Perform a scan over the specified region of interest (ROI)."""
         pass
 
     @abstractmethod
-    async def _expose_scan(self, roi: ROI, duration: Union[float, int]):
+    async def _expose_scan(self, roi: "ROI", duration: Union[float, int]):
         """Scan over the specified region of interest (ROI) with laser."""
         pass
 
     @abstractmethod
-    async def _move(self, roi: ROI):
+    async def _move(self, roi: "ROI"):
         """Move the stage ROI x,y,z coordinates."""
         pass
 
@@ -383,7 +383,7 @@ class BaseMicroscope(BaseSystem):
         pass
 
     @abstractmethod
-    async def _find_focus(self, roi: ROI):
+    async def _find_focus(self, roi: "ROI"):
         """Async set the parameters for the ROI."""
         # Reset stage to initial position after finding focus
         pass
@@ -401,19 +401,19 @@ class BaseMicroscope(BaseSystem):
                 self.expose(r)
         await self._queue.join()
 
-    async def _focus(self, roi: ROI):
+    async def _focus(self, roi: "ROI"):
         """Async find focus on roi."""
         await self._set_parameters(roi, "focus")
         await self._find_focus(roi)
 
-    async def _expose(self, roi: ROI):
+    async def _expose(self, roi: "ROI"):
         """Async expose the sample for a specified duration without imaging."""
 
         await self._move(roi.stage)
         await self._set_parameters(roi, "expose")
         await self._expose_scan(roi)
 
-    async def _image(self, roi: ROI) -> None:
+    async def _image(self, roi: "ROI") -> None:
         """Async image ROIs."""
 
         await self._move(roi.stage)
@@ -749,6 +749,23 @@ class BaseSequencer(BaseSystem):
         for fc in fc_:
             task_ids.append(fc.wait(wait_command.event))
         return task_ids
+
+    # TODO
+    # def user(
+    #     self,
+    #     flowcells: Union[str, int] = None,
+    #     user_command: UserCommand = None,
+    #     **kwargs,
+    # ) -> Union[int, List[int]]:
+    #     """Specified flow cell waits for microscope before continuing."""
+
+    #     if user_command is None:
+    #         user_command = UserCommand(**kwargs)
+    #     fc_ = self._get_fc_list(flowcells)
+    #     task_ids = []
+    #     for fc in fc_:
+    #         task_ids.append(fc.wait(user_command.event))
+    #     return task_ids
 
     def temperature(
         self,
