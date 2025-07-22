@@ -532,22 +532,45 @@ class BasePumpCommand(BaseModel):
         return self
 
 
-def PumpCommandFactory(exp_config) -> BaseModel:
-    """Custom partially validated command to pump a reagent. '
+class PumpCommandFactory:
+    """Create custom partially validated command to pump a reagent. '
 
     Volume in uL and flow rate in uL/min are validated.
     Reagent is not validated.
     """
-    UserPumpParams = create_model("UserPumpParams", **custom_params(exp_config["pump"]))
 
-    class PumpCommand(UserPumpParams, BasePumpCommand):
-        @model_validator(mode="after")
-        def validate_pump(self) -> Self:
-            self_dict = self.model_dump()
-            recursive_validate(self_dict, HW_CONFIG[f"Pump{self.flowcell}"])
-            return self
+    @classmethod
+    def factory(cls, exp_config: dict = {}) -> Type[BasePumpCommand]:
+        UserPumpParams = create_model(
+            "UserPumpParams", **custom_params(exp_config["pump"])
+        )
 
-    return PumpCommand
+        class PumpCommand(UserPumpParams, BasePumpCommand):
+            @model_validator(mode="after")
+            def validate_pump(self) -> Self:
+                self_dict = self.model_dump()
+                recursive_validate(self_dict, HW_CONFIG[f"Pump{self.flowcell}"])
+                return self
+
+        return PumpCommand
+
+
+# def  PumpCommandFactory(exp_config) -> BaseModel:
+#     """Custom partially validated command to pump a reagent. '
+
+#     Volume in uL and flow rate in uL/min are validated.
+#     Reagent is not validated.
+#     """
+#     UserPumpParams = create_model("UserPumpParams", **custom_params(exp_config["pump"]))
+
+#     class PumpCommand(UserPumpParams, BasePumpCommand):
+#         @model_validator(mode="after")
+#         def validate_pump(self) -> Self:
+#             self_dict = self.model_dump()
+#             recursive_validate(self_dict, HW_CONFIG[f"Pump{self.flowcell}"])
+#             return self
+
+#     return PumpCommand
 
 
 def simple_txt_to_yaml(file_path: str) -> dict:
@@ -777,7 +800,7 @@ def dispatch_commmand_formatter(
     # ImageParams = ImageParams.factory(exp_config)
     # FocusParams = FocusParams.factory(exp_config)
     # ExposeParams = ExposeParams.factory(exp_config)
-    PumpCommand = PumpCommandFactory(exp_config)
+    PumpCommand = PumpCommandFactory.factory(exp_config)
 
     # Format Commands
     if command in "VALVE":

@@ -52,11 +52,11 @@ import logging
 
 LOGGER = logging.getLogger("PySeq")
 
-DefaultPump = PumpCommandFactory(DEFAULT_CONFIG)
+PumpCommand = PumpCommandFactory.factory(DEFAULT_CONFIG)
 
 
-class PumpCommand(DefaultPump):
-    pass
+# class PumpCommand(DefaultPump):
+#     pass
 
 
 ROI = ROIFactory.factory(DEFAULT_CONFIG)
