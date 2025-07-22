@@ -503,7 +503,7 @@ class UserCommand(BaseModel):
     """Command to pause flowcell until a user confirms a message."""
 
     message: str
-    timeout: PositiveFloat = None
+    timeout: Union[PositiveFloat, None] = None
     flowcell: Union[str, int] = None
 
 

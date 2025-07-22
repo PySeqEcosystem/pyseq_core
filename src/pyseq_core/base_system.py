@@ -24,6 +24,7 @@ from pyseq_core.base_protocol import (
     BaseOpticsParams,
     HoldCommand,
     WaitCommand,
+    UserCommand,
     TemperatureCommand,
 )
 from pyseq_core.base_protocol import (
@@ -553,7 +554,7 @@ class BaseFlowCell(BaseSystem):
     def user(self, message: str, timeout: Union[int, float]) -> None:
         """Send message to the user and wait for a response."""
         description = "Wait for user response"
-        return self.add_task(description, self._user_wait, message)
+        return self.add_task(description, self._user_wait, message, timeout)
 
     def temperature(self, temperature: Union[int, float]) -> None:
         """Set the temperature of the flow cell."""
@@ -750,22 +751,21 @@ class BaseSequencer(BaseSystem):
             task_ids.append(fc.wait(wait_command.event))
         return task_ids
 
-    # TODO
-    # def user(
-    #     self,
-    #     flowcells: Union[str, int] = None,
-    #     user_command: UserCommand = None,
-    #     **kwargs,
-    # ) -> Union[int, List[int]]:
-    #     """Specified flow cell waits for microscope before continuing."""
+    def user(
+        self,
+        flowcells: Union[str, int] = None,
+        user_command: UserCommand = None,
+        **kwargs,
+    ) -> Union[int, List[int]]:
+        """Specified flow cell waits for microscope before continuing."""
 
-    #     if user_command is None:
-    #         user_command = UserCommand(**kwargs)
-    #     fc_ = self._get_fc_list(flowcells)
-    #     task_ids = []
-    #     for fc in fc_:
-    #         task_ids.append(fc.wait(user_command.event))
-    #     return task_ids
+        if user_command is None:
+            user_command = UserCommand(**kwargs)
+        fc_ = self._get_fc_list(flowcells)
+        task_ids = []
+        for fc in fc_:
+            task_ids.append(fc.user(user_command.message, user_command.timeout))
+        return task_ids
 
     def temperature(
         self,
