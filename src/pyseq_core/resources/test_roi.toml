@@ -4,7 +4,6 @@ LLx = 14
 LLy = 14
 URx = 9
 URy = 9
-stage = {nz=1}
 
 [roi1B]
 flowcell = "B"
@@ -15,8 +14,8 @@ URy = 11
 stage = {nz=1}
 
 [A]
-roi2 = {LLx=13, LLy=13, URx=8, URy=8, stage = {nz=1}}
-roi3 = {LLx=17, LLy=17, URx=12, URy=12, stage = {nz=1}}
+roi2 = {LLx=13, LLy=13, URx=8, URy=8}
+roi3 = {LLx=17, LLy=17, URx=12, URy=12, stage = {tilt1=20000, tilt2=20000, tilt3=20000}}
 
 [B]
 roi2 = {LLx=12, LLy=12, URx=7, URy=7, stage = {nz=1}}

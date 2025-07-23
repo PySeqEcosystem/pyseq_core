@@ -4,7 +4,7 @@ from pyseq_core.base_protocol import ROIFactory
 from pyseq_core.utils import DEFAULT_CONFIG  # #HW_CONFIG, deep_merge
 
 from warnings import warn
-from typing import Union, Dict, Callable, Any, TYPE_CHECKING
+from typing import Union, Dict, Callable, Any, Type, TYPE_CHECKING
 import logging
 import tomlkit
 from asyncio import Condition
@@ -16,6 +16,7 @@ LOGGER = logging.getLogger("PySeq")
 
 
 DefaultROI = ROIFactory.factory(DEFAULT_CONFIG)
+ROIType = Type[DefaultROI]
 
 
 # class DefaultROI(_DefaultROI):
@@ -26,8 +27,8 @@ def read_roi_config(
     flowcells: str,
     config_path: str,
     exp_config: dict = None,
-    custom_roi_factory: Callable[[str, Union[int, str], Any], DefaultROI] = None,
-) -> list[DefaultROI]:
+    custom_roi_factory: Callable[[str, Union[int, str], Any], ROIType] = None,
+) -> list[ROIType]:
     """Read ROI toml file and return list of ROIs.
 
     TOML file can be in any of the following forms
@@ -108,6 +109,7 @@ def read_roi_config(
     roi_config = tomlkit.parse(open(config_path).read())
 
     if exp_config is not None:
+        LOGGER.info("using custom experiment settings")
         ROI = ROIFactory.factory(exp_config)
     else:
         ROI = DefaultROI
@@ -119,10 +121,17 @@ def read_roi_config(
             # {flowcell: {roi_name: **custom_roi_kwargs}
             fc = roi_name
             for roi_name_, roi_ in _roi.items():
-                rois.append(custom_roi_factory(name=roi_name_, flowcell=fc, **roi_))
+                rois.append(
+                    custom_roi_factory(
+                        name=roi_name_,
+                        flowcell=fc,
+                        ROIconstructor=ROI,
+                        **roi_,
+                    )
+                )
         elif fc is not None and fc in flowcells:
             # {roi_name: {flowcell: fc, **custom_roi_kwargs}
-            rois.append(custom_roi_factory(name=roi_name, **_roi))
+            rois.append(custom_roi_factory(name=roi_name, ROIconstructor=ROI, **_roi))
         else:
             # {roi_name: name, stage: **stage_kwargs, image:**image_kwargs, ...}
             rois.append(ROI(name=roi_name, **_roi))
@@ -245,7 +254,12 @@ class ROIManager:
         Args:
             flowcell (str): The name of the flowcell to wait for ROIs on.
         """
-        with self.roi_condition:
-            LOGGER.info(f"Waiting for ROIs on flowcell {flowcell}")
-            self.roi_condition.wait_for(self.rois(flowcell) > 0)
+
+        def roi_on_flowcell(flowcell):
+            return len(self.rois(flowcell)) > 0
+
+        async with self.roi_condition:
+            if len(self.rois(flowcell)) == 0:
+                LOGGER.info(f"Waiting for ROIs on flowcell {flowcell}")
+            await self.roi_condition.wait_for(lambda: len(self.rois(flowcell)) > 0)
             LOGGER.info(f"{len(self.rois(flowcell))} ROIs on flowcell {flowcell}")

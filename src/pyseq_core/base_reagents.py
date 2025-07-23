@@ -58,7 +58,7 @@ class BaseReagent(BaseModel):
         Returns:
             BaseReagent: The validated `BaseReagent` instance.
         """
-        validate_in(HW_CONFIG[f"Valve{self.flowcell}"]["valid_list"], self.port)
+        validate_in("port", self.port, HW_CONFIG[f"Valve{self.flowcell}"])
         validate_min_max("flow_rate", self.flow_rate, HW_CONFIG[f"Pump{self.flowcell}"])
         return self
 
@@ -286,7 +286,7 @@ class ReagentsManager:
         # Update port
         if reagents[reagent_name]["port"] != reagent["port"]:
             # validate port
-            validate_in(HW_CONFIG[f"Valve{flowcell}"]["valid_list"], reagent["port"])
+            validate_in("port", reagent["port"], HW_CONFIG[f"Valve{flowcell}"])
             # check if port used by another reagent
             existing_reagent = self.get_reagent_key(flowcell, reagent["port"])
             if len(existing_reagent) == 0:  # or existing_reagent == reagent['name']:

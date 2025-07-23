@@ -18,7 +18,6 @@ import yaml
 import logging
 import tomlkit
 from typing_extensions import Self
-from pathlib import Path
 
 
 # Set up logging
@@ -36,6 +35,23 @@ def custom_params(config: dict) -> dict:
     return kwargs
 
 
+# def recursive_validate(query_dict, valid_dict):
+#     """Recursively validate fields in query dictionary.
+
+#     The query dictionary is validated againt a valid dictionary from a config file.
+#     Data can be validated between min/max values if min_val and max_val keys are in the config file.
+#     Or data can be validate to be in a list if a valid_list key is in the config file.
+
+#     """
+#     for k, v in query_dict.items():
+#         if isinstance(v, dict) and k in valid_dict and isinstance(valid_dict[k], dict):
+#             recursive_validate(v, valid_dict[k])
+#         elif "max_val" in valid_dict and "min_val" in valid_dict:
+#             validate_min_max(k, v, valid_dict)
+#         elif "valid_list" in valid_dict:
+#             validate_in(valid_dict[k], v)
+
+
 def recursive_validate(query_dict, valid_dict):
     """Recursively validate fields in query dictionary.
 
@@ -44,55 +60,57 @@ def recursive_validate(query_dict, valid_dict):
     Or data can be validate to be in a list if a valid_list key is in the config file.
 
     """
+
     for k, v in query_dict.items():
-        if isinstance(v, dict) and k in valid_dict and isinstance(valid_dict[k], dict):
-            recursive_validate(v, valid_dict[k])
-        elif "max_val" in valid_dict and "min_val" in valid_dict:
-            validate_min_max(k, v, valid_dict)
-        elif "valid_list" in valid_dict:
-            validate_in(valid_dict[k], v)
+        if k in valid_dict:
+            if isinstance(v, dict) and isinstance(valid_dict[k], dict):
+                recursive_validate(v, valid_dict[k])
+            elif "max_val" in valid_dict[k] and "min_val" in valid_dict[k]:
+                validate_min_max(k, v, valid_dict)
+            elif "valid_list" in valid_dict:
+                validate_in(k, v, valid_dict)
 
 
 def validate_min_max(
-    instrument: str, value: Union[int, float], valid_dict=HW_CONFIG
+    parameter: str, value: Union[int, float], valid_dict=HW_CONFIG
 ) -> Union[int, float]:
     """Validate value to be between min/max values for a specific instrument.
 
     The valid_dict should have the structure:
-    {instrument: {min_val: some_min_value,
-                  max_val: some_max_value}
+    {parameter: {min_val: some_min_value,
+                 max_val: some_max_value}
 
     """
 
-    min_val = valid_dict[instrument]["min_val"]
-    max_val = valid_dict[instrument]["max_val"]
-    units = valid_dict[instrument].get("units", "")
+    min_val = valid_dict[parameter]["min_val"]
+    max_val = valid_dict[parameter]["max_val"]
+    units = valid_dict[parameter].get("units", "")
 
     if min_val <= value <= max_val:
         return value
     else:
-        msg = f"{instrument} value should be between {min_val} and {max_val} {units}"
+        msg = f"{parameter} value ({value}) should be between {min_val} and {max_val} {units}"
         LOGGER.error(msg)
         raise ValueError(msg)
 
 
-def validate_in(valid_list: list, value: Any) -> Any:
+def validate_in(parameter: Any, value: Any, valid_dict: dict) -> Any:
     """Validate value to be in a valid list."""
-    if value in valid_list:
+    if value in valid_dict[parameter]["valid_list"]:
         return value
     else:
-        msg = f"{value} not in valid list"
+        msg = f"{parameter} value ({value}) not in valid list"
         LOGGER.error(msg)
         raise ValueError(msg)
 
 
-def validate_path(value: str) -> str:
-    if Path(value).exists():
-        return value
-    else:
-        msg = f"{value} does not exist"
-        LOGGER.error(msg)
-        raise ValueError
+# def validate_path(value: str) -> str:
+#     if Path(value).exists():
+#         return value
+#     else:
+#         msg = f"{value} does not exist"
+#         LOGGER.error(msg)
+#         raise ValueError
 
 
 ## Consider rewriting class factories like this
@@ -200,21 +218,21 @@ class BaseStagePosition(BaseModel):
     @field_validator("x_init", "x_last", mode="after")
     @classmethod
     def validate_x_pos(cls, value: int) -> int:
-        return validate_min_max("XStage", value)
+        return validate_min_max("position", value, HW_CONFIG["XStage"])
 
     @field_validator("y_init", "y_last", mode="after")
     @classmethod
     def validate_y_pos(cls, value: int) -> int:
-        return validate_min_max("YStage", value)
+        return validate_min_max("position", value, HW_CONFIG["YStage"])
 
     @field_validator("z_init", mode="after")
     @classmethod
     def validate_z_pos(cls, value: int) -> int:
-        return validate_min_max("ZStage", value)
+        return validate_min_max("position", value, HW_CONFIG["ZStage"])
 
     @model_validator(mode="after")
     def validate_stage_positions(self) -> Self:
-        validate_min_max("ZStage", self.z_last)
+        validate_min_max("position", self.z_last, HW_CONFIG["ZStage"])
         return self
 
 
@@ -228,17 +246,17 @@ class BaseSimpleStage(BaseModel):
     @field_validator("x", mode="after")
     @classmethod
     def validate_x_pos(cls, value: int) -> int:
-        return validate_min_max("XStage", value)
+        return validate_min_max("position", value, HW_CONFIG["XStage"])
 
     @field_validator("y", mode="after")
     @classmethod
     def validate_y_pos(cls, value: int) -> int:
-        return validate_min_max("YStage", value)
+        return validate_min_max("position", value, HW_CONFIG["YStage"])
 
     @field_validator("z", mode="after")
     @classmethod
     def validate_z_pos(cls, value: int) -> int:
-        return validate_min_max("ZStage", value)
+        return validate_min_max("position", value, HW_CONFIG["ZStage"])
 
 
 class StageFactory:
@@ -311,7 +329,19 @@ SimpleStageType = Type[SimpleStage]
 # class BaseOpticsParams(BaseModel):
 #     """Empty pydantic BaseModel to hold sequencer specific optical parameters"""
 #     pass
-OpticsParams = create_model("OpticsParams", **custom_params(DEFAULT_CONFIG["optics"]))
+UnvalidateOpticsParams = create_model(
+    "OpticsParams", **custom_params(DEFAULT_CONFIG["optics"])
+)
+
+
+class OpticsParams(UnvalidateOpticsParams):
+    @model_validator(mode="after")
+    def validate_optics(self) -> Self:
+        self_dict = self.model_dump()
+        recursive_validate(self_dict, HW_CONFIG["optics"])
+        return self
+
+
 BaseOpticsParams = Type[OpticsParams]
 
 # class OpticsFactory:
@@ -329,7 +359,7 @@ BaseOpticsParams = Type[OpticsParams]
 
 
 class ImageParams(BaseModel):
-    optics: OpticsParams  # type: ignore
+    optics: OpticsParams
     output: DirectoryPath
     nz: int
 
@@ -357,7 +387,7 @@ class ImageParams(BaseModel):
 
 
 class FocusParams(BaseModel):
-    optics: OpticsParams  # type: ignore
+    optics: OpticsParams
     routine: Literal[*DEFAULT_CONFIG["auto_focus_routines"]["routines"]]  # type: ignore
     output: DirectoryPath
     z_focus: Union[int, float] = -1
@@ -389,7 +419,7 @@ class FocusParams(BaseModel):
 
 
 class ExposeParams(BaseModel):
-    optics: OpticsParams  # type: ignore
+    optics: OpticsParams
     n_exposures: int
 
     @classmethod
@@ -468,7 +498,7 @@ class ValveCommand(BaseModel):
 
     @model_validator(mode="after")
     def validate_port(self) -> Self:
-        validate_in(HW_CONFIG[f"Valve{self.flowcell}"]["valid_list"], self.port)
+        validate_in("port", self.port, HW_CONFIG[f"Valve{self.flowcell}"])
         return self
 
 
@@ -481,7 +511,11 @@ class TemperatureCommand(BaseModel):
 
     @model_validator(mode="after")
     def validate_temperature(self) -> Self:
-        validate_min_max(f"TemperatureController{self.flowcell}", self.temperature)
+        validate_min_max(
+            "temperature",
+            self.temperature,
+            HW_CONFIG[f"TemperatureController{self.flowcell}"],
+        )
         return self
 
 
@@ -528,7 +562,7 @@ class BasePumpCommand(BaseModel):
             )
         validate_min_max("volume", self.volume, HW_CONFIG[f"Pump{self.flowcell}"])
         if isinstance(self.reagent, int):
-            validate_in(HW_CONFIG[f"Valve{self.flowcell}"]["valid_list"], self.reagent)
+            validate_in("port", self.reagent, HW_CONFIG[f"Valve{self.flowcell}"])
         return self
 
 
@@ -672,7 +706,7 @@ def check_pump(
     if isinstance(params, dict):
         command = PumpCommand(flowcell=flowcell, **params)
     else:
-        command = PumpCommand(flowcell=flowcell, volume=params, flow_rate=0)
+        command = PumpCommand(flowcell=flowcell, volume=params)
 
     return command.model_dump()
 

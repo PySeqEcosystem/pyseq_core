@@ -23,7 +23,7 @@ from pyseq_core.base_instruments import (
 )
 from pyseq_core.base_reagents import ReagentsManager
 from pyseq_core.base_protocol import (
-    BaseOpticsParams,
+    OpticsParams,
     HoldCommand,
     WaitCommand,
     UserCommand,
@@ -382,7 +382,7 @@ class BaseMicroscope(BaseSystem):
 
     @abstractmethod
     async def _set_parameters(
-        self, image_params: BaseOpticsParams, mode: Literal["image", "focus", "expose"]
+        self, image_params: OpticsParams, mode: Literal["image", "focus", "expose"]
     ):
         """Async set the parameters for the ROI."""
         pass
@@ -448,7 +448,7 @@ class BaseMicroscope(BaseSystem):
         description = f"Move x:{stage.x}, y:{stage.y}, z:{stage.z}"
         return self.add_task(description, self._move, stage)
 
-    def set_parameters(self, roi_params: BaseOpticsParams) -> None:
+    def set_parameters(self, roi_params: OpticsParams) -> None:
         """Set the laser power, filters, exposure, imaging mode, etc. for a specified region of interest (ROI)."""
         description = "Setting parameters"
         return self.add_task(description, self._set_parameters, roi_params)
@@ -1014,7 +1014,8 @@ class BaseSequencer(BaseSystem):
         if all_systems_go:
             # Check if ROIs needed -> wait for ROIs if none in config
             for fc in flowcells:
-                if not check_for_rois(fprotocol[fc.name]) and len(fc.ROIs) == 0:
+                # if not check_for_rois(fprotocol[fc.name]) and len(fc.ROIs) == 0:
+                if not check_for_rois(fprotocol[fc.name]):
                     await self._roi_manager.wait_for_rois(fc.name)
 
         # Add steps from protocol to queues
@@ -1056,5 +1057,7 @@ class BaseSequencer(BaseSystem):
                             self.expose(flowcells=flowcell)
 
     @abstractmethod
-    def custom_roi_factory(name: str, flowcell: Union[str, int], **kwargs) -> ROIType:
+    def custom_roi_factory(
+        name: str, flowcell: Union[str, int], ROIconstructor, **kwargs
+    ) -> ROIType:
         pass

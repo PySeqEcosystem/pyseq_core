@@ -450,7 +450,9 @@ class TestSequencer(BaseSequencer):
     async def _configure(self):
         LOGGER.debug(f"Configuring {self.name}")
 
-    def custom_roi_factory(self, name: str, **kwargs) -> ROIType:
+    def custom_roi_factory(
+        self, name: str, ROIconstructor: ROIType, **kwargs
+    ) -> ROIType:
         """Take LLx, LLy, URx, URy coordinates and return an ROI with stage coordinates."""
         LLx = kwargs.pop("LLx") * 100
         LLy = kwargs.pop("LLy") * 100
@@ -481,4 +483,4 @@ class TestSequencer(BaseSequencer):
         }
         stage.update(kwargs.pop("stage", {}))
 
-        return ROI(name=name, stage=stage, **kwargs)
+        return ROIconstructor(name=name, stage=stage, **kwargs)
