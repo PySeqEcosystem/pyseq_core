@@ -8,10 +8,11 @@ from pyseq_core.utils import (
 )
 from pyseq_core.base_instruments import (
     BaseInstrument,
-    BaseYStage,
-    BaseXStage,
-    BaseZStage,
-    BaseObjectiveStage,
+    BaseStage,
+    # BaseYStage,
+    # BaseXStage,
+    # BaseZStage,
+    # BaseObjectiveStage,
     BaseShutter,
     BaseFilterWheel,
     BaseLaser,
@@ -310,22 +311,22 @@ class BaseMicroscope(BaseSystem):
     lock_condition: asyncio.Lock = field(factory=asyncio.Lock)
 
     @property
-    def YStage(self) -> BaseYStage:
+    def YStage(self) -> BaseStage:
         """Abstract property for the YStage."""
         return self.instruments.get("YStage", None)
 
     @property
-    def XStage(self) -> BaseXStage:
+    def XStage(self) -> BaseStage:
         """Abstract property for the XStage."""
         return self.instruments.get("XStage", None)
 
     @property
-    def ZStage(self) -> BaseZStage:
+    def ZStage(self) -> BaseStage:
         """Abstract property for the ZStage."""
         return self.instruments.get("ZStage", None)
 
     @property
-    def ObjStage(self) -> BaseObjectiveStage:
+    def ObjStage(self) -> BaseStage:
         """Abstract property for the ObjStage."""
         return self.instruments.get("ObjStage", None)
 
@@ -554,16 +555,21 @@ class BaseFlowCell(BaseSystem):
         description = f"Wait for {event}."
         return self.add_task(description, self._wait, event)
 
-    def user(self, message: str, timeout: Union[int, float]) -> None:
+    def user(self, message: str, timeout: Union[float, None]) -> None:
         """Send message to the user and wait for a response."""
         description = "Wait for user response"
         return self.add_task(description, self._user_wait, message, timeout)
 
-    def temperature(self, temperature: Union[int, float]) -> None:
+    def temperature(
+        self, temperature: Union[int, float], timeout: Union[float, None]
+    ) -> None:
         """Set the temperature of the flow cell."""
         description = f"Set temperature to {temperature} C"
         return self.add_task(
-            description, self.TemperatureController.set_temperature, temperature
+            description,
+            self.TemperatureController.set_temperature,
+            temperature,
+            timeout,
         )
 
     @listerize_roi

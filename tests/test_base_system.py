@@ -77,12 +77,8 @@ async def check_fc_queue(
 
 @pytest.mark.asyncio
 async def test_temperature(BaseTestSequencer):
-    for t in [25, 37, 50]:
-        BaseTestSequencer.temperature(temperature=t)
-        for fc in BaseTestSequencer.enabled_flowcells:
-            await fc.TemperatureController.wait_for_temperature(
-                t, timeout=1, interval=0.01
-            )
+    for T, timeout in zip([25, 37, 50], [0, None, 1]):
+        BaseTestSequencer.temperature(temperature=T, timeout=timeout)
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ from pydantic import (
     computed_field,
     PositiveInt,
     PositiveFloat,
+    NonNegativeFloat,
     field_validator,
     model_validator,
     DirectoryPath,
@@ -427,8 +428,6 @@ class ROIFactory:
             focus: FocusParams = FocusParams.factory(exp_config)
             expose: ExposeParams = ExposeParams.factory(exp_config)
 
-        print(ROI)
-
         return ROI
 
 
@@ -477,6 +476,7 @@ class TemperatureCommand(BaseModel):
     """Validated command to set the flowcell temperature."""
 
     temperature: float
+    timeout: Union[None, NonNegativeFloat] = 0
     flowcell: Union[str, int] = None
 
     @model_validator(mode="after")
