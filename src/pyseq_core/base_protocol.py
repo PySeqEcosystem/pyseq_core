@@ -759,10 +759,16 @@ def check_image(
     defaults = exp_config.copy()
 
     # Get default nz in experiment config to override protocol nz
-    if StagePosition.model_fields["nz"].default > 0:
-        nz = StagePosition.model_fields["nz"].default
+    if exp_config["image"]["nz"] > 0:
+        nz = exp_config["image"]["nz"]
     else:
         nz = None
+
+    # Get default nz in experiment config to override protocol nz
+    # if StagePosition.model_fields["nz"].default > 0:
+    #     nz = StagePosition.model_fields["nz"].default
+    # else:
+    #     nz = None
 
     # Format parameters from protocol
     if isinstance(params, dict):
@@ -786,11 +792,13 @@ def check_image(
         # nz was never specified, raise Error
         raise KeyError("Number of z planes to image, nz, is not specified")
 
+    # TODO test this, it probably does not update default stage params with stage params specified in protocol file
     # Check stage commands
     if ptype is dict and "stage" in params:
         dict_stage = StagePosition(params["stage"]).model_dump()
         dict_command.update({"stage": dict_stage})
 
+    # TODO test this, it probably does not update default focus params with focus params specified in protocol file
     # Check focus commands
     if ptype is dict and "focus" in params:
         dict_focus = FocusParams.factory(defaults).model_dump()
@@ -831,6 +839,7 @@ def check_expose(
         # nz was never specified, raise Error
         raise KeyError("Number of exposures, n_exposures, is not specified")
 
+    # TODO test this, it probably does not update default stage params with stage params specified in protocol file
     # Check stage commands
     if ptype is dict and "stage" in params:
         stage = StagePosition(params["stage"])
