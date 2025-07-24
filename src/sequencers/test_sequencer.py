@@ -450,21 +450,18 @@ class TestSequencer(BaseSequencer):
     async def _configure(self):
         LOGGER.debug(f"Configuring {self.name}")
 
-    def custom_roi_factory(
-        self, name: str, ROIconstructor: ROIType, **kwargs
-    ) -> ROIType:
-        """Take LLx, LLy, URx, URy coordinates and return an ROI with stage coordinates."""
+    def custom_roi_stage(self, flowcell: Union[str, int], **kwargs) -> ROIType:
+        """Take LLx, LLy, URx, URy coordinates and return stage position parameters."""
         LLx = kwargs.pop("LLx") * 100
         LLy = kwargs.pop("LLy") * 100
         URx = kwargs.pop("URx") * 100
         URy = kwargs.pop("URy") * 100
-        fc = kwargs.get("flowcell")
 
         # x, y, Steps Per UMicron
         x_spum = self._config["XStage"]["spum"]
         y_spum = self._config["YStage"]["spum"]
         # x, y origin
-        x_origin = self._config["XStage"]["origin"][fc]
+        x_origin = self._config["XStage"]["origin"][flowcell]
         y_origin = self._config["YStage"]["origin"]
         # x_origin = self.microscope.XStage.config["origin"][fc]
         # y_origin = self.microscope.YStage.config["origin"]
@@ -475,12 +472,11 @@ class TestSequencer(BaseSequencer):
         y_last = LLy * y_spum + y_origin
 
         stage = {
-            "flowcell": fc,
+            "flowcell": flowcell,
             "x_init": x_init,
             "x_last": x_last,
             "y_init": y_init,
             "y_last": y_last,
         }
         stage.update(kwargs.pop("stage", {}))
-
-        return ROIconstructor(name=name, stage=stage, **kwargs)
+        return stage

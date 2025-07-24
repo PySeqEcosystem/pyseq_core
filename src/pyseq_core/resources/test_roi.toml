@@ -1,22 +1,31 @@
+# Table of 
+
 [roi1A]
-flowcell = "A"
+# Table of stage parameters for a specific ROI
+flowcell = "A"                              
+# custom parameters used `BaseSequencer.custom_roi_factory` to generate stage 
+# coordinates for ROI                       
 LLx = 14
 LLy = 14
 URx = 9
 URy = 9
 
 [roi1B]
+# Table of stage parameters for a specific ROI
 flowcell = "B"
+# custom parameters used `BaseSequencer.custom_roi_factory` to generate stage 
+# coordinates for ROI 
 LLx = 16
 LLy = 16
 URx = 11
 URy = 11
-stage = {nz=1}
+# override default parameters specified in experiment config TOML file
+stage = {nz=1}                                                                  # override number of z planes
 
 [A]
-roi2 = {LLx=13, LLy=13, URx=8, URy=8}
+roi2 = {LLx=13, LLy=13, URx=8, URy=8, image={optics={power={red=100}}}}
 roi3 = {LLx=17, LLy=17, URx=12, URy=12, stage = {tilt1=20000, tilt2=20000, tilt3=20000}}
 
 [B]
-roi2 = {LLx=12, LLy=12, URx=7, URy=7, stage = {nz=1}}
+roi2 = {LLx=12, LLy=12, URx=7, URy=7, stage = {x_overlap=50}}
 roi3 = {LLx=18, LLy=18, URx=13, URy=13, stage = {nz=1}}

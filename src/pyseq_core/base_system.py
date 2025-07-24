@@ -390,7 +390,9 @@ class BaseMicroscope(BaseSystem):
     @abstractmethod
     async def _find_focus(self, roi: ROIType):
         """Async set the parameters for the ROI."""
-        # Reset stage to initial position after finding focus
+        # Reset X & Y stage to initial position after finding focus
+        # Save Z stage focus position to `ROI.focus.z_focus`
+        # Move Z stage to `ROI.focus.z_focus`
         pass
 
     @reserve_microscope
@@ -425,6 +427,8 @@ class BaseMicroscope(BaseSystem):
         if roi.focus.z_focus == -1:
             await self._set_parameters(roi, "focus")
             await self._find_focus(roi)
+        else:
+            await self.ZStage.move(roi.focus.z_focus)
         await self._set_parameters(roi, "image")
         await self._scan(roi)
 
@@ -918,20 +922,22 @@ class BaseSequencer(BaseSystem):
                 fc_names,
                 roi_path,
                 flowcells[0]._exp_config,
-                self.custom_roi_factory,
+                self.custom_roi_stage,
             )
         except ValidationError as e:
             LOGGER.error(e)
             return 0
 
         # Add rois to flowcells
+        was_roi_added = []
         for roi in rois:
-            self._roi_manager.add(roi)
+            LOGGER.info(roi)
+            was_roi_added.append(self._roi_manager.add(roi))
         # Wake up flowcells waiting for ROIs
-        if self._roi_manager.roi_condition.locked():
+        if self._roi_manager.roi_condition.locked() and all(was_roi_added):
             self._roi_manager.roi_condition.notify_all()
 
-        return len(rois)
+        return sum(was_roi_added)
 
     def new_experiment(
         self, fc_names: Union[str, int], exp_config_path: str, exp_name: str
@@ -1057,7 +1063,5 @@ class BaseSequencer(BaseSystem):
                             self.expose(flowcells=flowcell)
 
     @abstractmethod
-    def custom_roi_factory(
-        name: str, flowcell: Union[str, int], ROIconstructor, **kwargs
-    ) -> ROIType:
+    def custom_roi_stage(flowcell: Union[str, int], **kwargs) -> dict:
         pass

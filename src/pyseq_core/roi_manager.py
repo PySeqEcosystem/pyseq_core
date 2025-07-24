@@ -27,7 +27,7 @@ def read_roi_config(
     flowcells: str,
     config_path: str,
     exp_config: dict = None,
-    custom_roi_factory: Callable[[str, Union[int, str], Any], ROIType] = None,
+    custom_roi_stage: Callable[[str, Union[int, str], Any], ROIType] = None,
 ) -> list[ROIType]:
     """Read ROI toml file and return list of ROIs.
 
@@ -95,11 +95,11 @@ def read_roi_config(
         exp_config (dict, optional): An optional experiment configuration dictionary.
             If provided, a `BaseROIFactory` will be initialized with this config
             to create ROI objects. If None, `DefaultROI` is used. Defaults to None.
-        custom_roi_factory (Callable[[str, Union[int, str], Any], DefaultROI], optional):
-            A callable (function or class) that takes `name`, `flowcell`, and
-            `**kwargs` as arguments and returns an instance of `DefaultROI`
-            (or a compatible ROI object). This allows for custom parsing and
-            instantiation of ROIs based on the TOML data. Defaults to None.
+        custom_roi_stage (Callable[[str, Union[int, str], Any], DefaultROI], optional):
+            A callable (function or class) that takes `flowcell`, a custom ROI constructor, and
+            `**kwargs` as arguments and returns dictionary of parameters for `StagePosition`. 
+            This allows for custom parsing of real world coordinates and conversion
+            to sequencer specific stage coordinates and. 
 
     Returns:
         list[DefaultROI]: A list of `DefaultROI` objects (or objects created
@@ -109,7 +109,6 @@ def read_roi_config(
     roi_config = tomlkit.parse(open(config_path).read())
 
     if exp_config is not None:
-        LOGGER.info("using custom experiment settings")
         ROI = ROIFactory.factory(exp_config)
     else:
         ROI = DefaultROI
@@ -121,17 +120,13 @@ def read_roi_config(
             # {flowcell: {roi_name: **custom_roi_kwargs}
             fc = roi_name
             for roi_name_, roi_ in _roi.items():
-                rois.append(
-                    custom_roi_factory(
-                        name=roi_name_,
-                        flowcell=fc,
-                        ROIconstructor=ROI,
-                        **roi_,
-                    )
-                )
+                stage = custom_roi_stage(fc, **roi_)
+                rois.append(ROI.merge_defaults(roi_name_, stage, roi_))
+
         elif fc is not None and fc in flowcells:
             # {roi_name: {flowcell: fc, **custom_roi_kwargs}
-            rois.append(custom_roi_factory(name=roi_name, ROIconstructor=ROI, **_roi))
+            stage = custom_roi_stage(**_roi)
+            rois.append(ROI.merge_defaults(roi_name, stage, _roi))
         else:
             # {roi_name: name, stage: **stage_kwargs, image:**image_kwargs, ...}
             rois.append(ROI(name=roi_name, **_roi))
@@ -167,7 +162,7 @@ class ROIManager:
         """
         return self.flowcells[flowcell].ROIs
 
-    def add(self, roi: DefaultROI = None, exp_config: dict = None, **kwargs):
+    def add(self, roi: DefaultROI = None, exp_config: dict = None, **kwargs) -> bool:
         """Adds a Region of Interest (ROI) to a flowcell.
 
         If an `roi` object is provided, it is added directly. Otherwise, a new
@@ -201,10 +196,12 @@ class ROIManager:
             self.rois(fc)[roi.name] = roi
             LOGGER.info(f"Added {roi.name} to flowcell {fc}")
             LOGGER.debug(f"{roi}")
+            return True
         else:
             msg = f"{roi.name} already exists on flowcell {fc}"
             LOGGER.warning(msg)
             warn(msg, UserWarning)
+            return False
 
     def update(self, roi: DefaultROI):
         """Updates an existing Region of Interest (ROI) on a flowcell.

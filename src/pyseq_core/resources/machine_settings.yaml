@@ -42,13 +42,15 @@ Test:
       min_val: -7000000
       max_val: 7000000
       units: steps
-  TiltStage:
+  TiltStage: &tiltstage
     address: COM8, COM9
     spum: 100
     position: &tiltposition
      min_val: 0
      max_val: 30000
      units: steps
+  TiltStage2: *tiltstage
+  TiltStage3: *tiltstage
   ZStage:
     address: TiltStage
     spum: 1
@@ -90,13 +92,12 @@ Test:
     address: TiltStage
     filter: &green_filter_wheel 
       valid_list: {'home':0, 'open':1, '0.1':2, '2.0':3}
-  Camera_558_687:
+  Camera_558_687: &camera
     exposure: &camera_exposure
       min_val: 0.1
       max_val: 10
       units: s
-  Camera_610_740:
-    exposure: *camera_exposure
+  Camera_610_740: *camera
   optics:
     power:
       green: *green_laser

@@ -1,9 +1,6 @@
 [experiment]
 name = "TestExperiment"
-#image_path = '.'
-#focus_path = '.'
-#roi_path = '.'
-#protocol_path = None
+#protocol_path = None                                                           # Usually mandatory, but tests will append path from a custom test directory
 
 [reagents]
 PBS = 1
@@ -37,16 +34,7 @@ filter.green = "open"
 [stage]
 tilt1 = 21500  
 tilt2 = 21500  
-tilt3 = 21500  
-
-
-[optics]
-power.red = 0
-power.green = 0                                                  
-filter.red = "home"
-filter.green = "home"
-exposure.Camera_558_687 = 1
-exposure.Camera_610_740 = 1                                           
+tilt3 = 21500                                         
 
 [pump]
 flow_rate = 500                                                                 # uL/min

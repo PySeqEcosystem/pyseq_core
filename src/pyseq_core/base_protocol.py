@@ -142,8 +142,8 @@ class BaseStagePosition(BaseModel):
     z_step: PositiveInt = HW_CONFIG["ZStage"][
         "step"
     ]  # Not a cached_property because want to change easily
-    x_overlap: PositiveFloat = 0.0
-    y_overlap: PositiveFloat = 0.0
+    x_overlap: NonNegativeFloat = 0.0
+    y_overlap: NonNegativeFloat = 0.0
 
     @computed_field
     @property
@@ -359,9 +359,9 @@ BaseOpticsParams = Type[OpticsParams]
 
 
 class ImageParams(BaseModel):
-    optics: OpticsParams
-    output: DirectoryPath
-    nz: int
+    optics: Union[OpticsParams, None]
+    output: DirectoryPath = "."
+    nz: Union[int, None] = 0
 
     @classmethod
     def factory(cls, exp_config: dict) -> Self:
@@ -387,9 +387,11 @@ class ImageParams(BaseModel):
 
 
 class FocusParams(BaseModel):
-    optics: OpticsParams
-    routine: Literal[*DEFAULT_CONFIG["auto_focus_routines"]["routines"]]  # type: ignore
-    output: DirectoryPath
+    optics: Union[OpticsParams, None]
+    routine: Literal[*DEFAULT_CONFIG["auto_focus_routines"]["routines"]] = (
+        DEFAULT_CONFIG["auto_focus_routines"]["routines"][0]
+    )  # type: ignore
+    output: DirectoryPath = "."
     z_focus: Union[int, float] = -1
 
     @classmethod
@@ -419,8 +421,8 @@ class FocusParams(BaseModel):
 
 
 class ExposeParams(BaseModel):
-    optics: OpticsParams
-    n_exposures: int
+    optics: Union[OpticsParams, None]
+    n_exposures: Union[int, None]
 
     @classmethod
     def factory(cls, exp_config: dict = {}) -> Self:
@@ -445,6 +447,19 @@ class BaseROI(BaseModel):
     image: ImageParams
     focus: FocusParams
     expose: ExposeParams
+
+    @classmethod
+    def merge_defaults(
+        cls, name: str, stage: dict, extra_params: dict = {}
+    ) -> BaseModel:
+        # Shallow update stage position parameters with extra parameters
+        stage.update(extra_params.pop("stage", {}))
+        # Get default parameters
+        roi = cls(name=name, stage=stage)
+        roi_dict = roi.model_dump()
+        # Deep update extra kwargs into roi_dict
+        roi_dict = deep_merge(extra_params, roi_dict)
+        return cls(**roi_dict)
 
 
 class ROIFactory:
