@@ -1,5 +1,10 @@
-from pyseq_core.base_system import BaseFlowCell, BaseMicroscope, BaseSequencer, ROI
-from pyseq_core.base_protocol import Optics
+from pyseq_core.base_system import (
+    BaseFlowCell,
+    BaseMicroscope,
+    BaseSequencer,
+    ROIFactory,
+)
+from pyseq_core.base_protocol import BaseOpticsParams
 from pyseq_core.utils import map_coms
 
 # from pyseq_core.baseROI import BaseROI, TestROI
@@ -8,16 +13,13 @@ from pyseq_core.base_instruments import (
     BaseShutter,
     BaseFilterWheel,
     BaseLaser,
-    BaseXStage,
-    BaseYStage,
-    BaseZStage,
-    BaseObjectiveStage,
+    BaseStage,
     BasePump,
     BaseValve,
     BaseTemperatureController,
-    BaseCOM,
 )
-from typing import Literal
+from pyseq_core.utils import BaseCOM, DEFAULT_CONFIG
+from typing import Literal, Type, Union
 from attrs import define, field
 import logging
 import asyncio
@@ -25,13 +27,13 @@ import asyncio
 
 LOGGER = logging.getLogger("PySeq")
 
+ROI = ROIFactory.factory(DEFAULT_CONFIG)
+ROIType = Type[ROI]
+
 
 @define
 class TestCOM(BaseCOM):
     open: bool = field(default=False)
-    # def __init__(self, address):
-    #     super().__init__(address=address)
-    # self.open = False
 
     async def connect(self):
         async with self.lock:
@@ -46,6 +48,11 @@ class TestCOM(BaseCOM):
         """Send a command to the instrument."""
         async with self.lock:
             LOGGER.debug(f"{self.name}: Tx: {command}")
+
+    async def close(self):
+        async with self.lock:
+            LOGGER.debug(f"Closing connection to {self.address}")
+            return True
 
 
 class DumbBaseMethods:
@@ -160,7 +167,7 @@ class TestLaser(DumbBaseMethods, BaseLaser):
         return self.power
 
 
-class TestYStage(DumbBaseMethods, BaseYStage):
+class TestYStage(DumbBaseMethods, BaseStage):
     def __init__(
         self,
         com: TestCOM,
@@ -177,7 +184,7 @@ class TestYStage(DumbBaseMethods, BaseYStage):
         return self._position
 
 
-class TestXStage(DumbBaseMethods, BaseXStage):
+class TestXStage(DumbBaseMethods, BaseStage):
     def __init__(self, com: TestCOM, name="XStage"):
         super().__init__(name, com=com)
         self._position = 0
@@ -190,7 +197,7 @@ class TestXStage(DumbBaseMethods, BaseXStage):
         return self._position
 
 
-class TestTiltStage(DumbBaseMethods, BaseZStage):
+class TestTiltStage(DumbBaseMethods, BaseStage):
     def __init__(self, com: TestCOM, name="TiltStage"):
         super().__init__(name, com=com)
         self._position = 0
@@ -203,7 +210,7 @@ class TestTiltStage(DumbBaseMethods, BaseZStage):
         return self._position
 
 
-class TestObjectiveStage(DumbBaseMethods, BaseObjectiveStage):
+class TestObjectiveStage(DumbBaseMethods, BaseStage):
     def __init__(self, com: TestCOM, name="ZStage"):
         super().__init__(name, com=com)
         self._position = 0
@@ -260,10 +267,12 @@ class TestTemperatureController(DumbBaseMethods, BaseTemperatureController):
         super().__init__(name, com=com)
         self._temperature = 25
 
-    async def set_temperature(self, temperature):
+    async def set_temperature(self, temperature: float, timeout: Union[None, float]):
         """Set the temperature."""
         LOGGER.debug(f"Setting {self.name} to {temperature}C")
         self._temperature = temperature
+        if timeout is None or timeout > 0:
+            await asyncio.wait_for(self.wait_for_temperature(temperature), timeout)
 
     async def get_temperature(self):
         """Get the current temperature."""
@@ -300,7 +309,7 @@ class TestMicroscope(BaseMicroscope):
     async def _configure(self):
         LOGGER.debug(f"Configure {self.name}")
 
-    async def _capture(self, roi: ROI, im_name: str):
+    async def _capture(self, roi: ROIType, im_name: str):
         """Capture an image and save it to the specified filename."""
 
         LOGGER.debug(f"Acquire {im_name}")
@@ -313,7 +322,7 @@ class TestMicroscope(BaseMicroscope):
         _.append(self.YStage.move(roi.stage.y_init))
         await asyncio.gather(*_)
 
-    async def _z_stack(self, roi: ROI, im_name: str):
+    async def _z_stack(self, roi: ROIType, im_name: str):
         """Perform a z-stack acquisition."""
 
         direction = roi.stage.z_direction
@@ -330,7 +339,7 @@ class TestMicroscope(BaseMicroscope):
             await self.ZStage.move(z)
             await self._capture(roi, f"{im_name}_z{z}")
 
-    async def _scan(self, roi: ROI, im_name: str = ""):
+    async def _scan(self, roi: ROIType, im_name: str = ""):
         """Perform a scan over the specified region of interest (ROI)."""
 
         x_init = roi.stage.x_init
@@ -346,7 +355,7 @@ class TestMicroscope(BaseMicroscope):
             await self.XStage.move(x)
             await self._z_stack(roi, f"{im_name}_x{x}")
 
-    async def _expose_scan(self, roi: ROI):
+    async def _expose_scan(self, roi: ROIType):
         """Async expose the sample for a specified duration without imaging."""
 
         x_init = roi.stage.x_init
@@ -371,7 +380,7 @@ class TestMicroscope(BaseMicroscope):
         LOGGER.debug(f"Saving focus data to {roi.focus.output}.")
         roi.focus.z_focus = 0
 
-    async def _move(self, roi: ROI):
+    async def _move(self, roi: ROIType):
         """Move the stage ROI x,y,z coordinates."""
         LOGGER.debug(f"Moving to x={roi.x}, y={roi.y}, z={roi.z}")
         await asyncio.gather(
@@ -381,7 +390,7 @@ class TestMicroscope(BaseMicroscope):
         )
 
     async def _set_parameters(
-        self, params: Optics, mode: Literal["image", "focus", "expose"]
+        self, params: BaseOpticsParams, mode: Literal["image", "focus", "expose"]
     ):
         """Set the parameters to expose/image the ROI."""
 
@@ -441,19 +450,18 @@ class TestSequencer(BaseSequencer):
     async def _configure(self):
         LOGGER.debug(f"Configuring {self.name}")
 
-    def custom_roi_factory(self, name: str, **kwargs) -> ROI:
-        """Take LLx, LLy, URx, URy coordinates and return an ROI with stage coordinates."""
+    def custom_roi_stage(self, flowcell: Union[str, int], **kwargs) -> ROIType:
+        """Take LLx, LLy, URx, URy coordinates and return stage position parameters."""
         LLx = kwargs.pop("LLx") * 100
         LLy = kwargs.pop("LLy") * 100
         URx = kwargs.pop("URx") * 100
         URy = kwargs.pop("URy") * 100
-        fc = kwargs.get("flowcell")
 
         # x, y, Steps Per UMicron
         x_spum = self._config["XStage"]["spum"]
         y_spum = self._config["YStage"]["spum"]
         # x, y origin
-        x_origin = self._config["XStage"]["origin"][fc]
+        x_origin = self._config["XStage"]["origin"][flowcell]
         y_origin = self._config["YStage"]["origin"]
         # x_origin = self.microscope.XStage.config["origin"][fc]
         # y_origin = self.microscope.YStage.config["origin"]
@@ -464,12 +472,11 @@ class TestSequencer(BaseSequencer):
         y_last = LLy * y_spum + y_origin
 
         stage = {
-            "flowcell": fc,
+            "flowcell": flowcell,
             "x_init": x_init,
             "x_last": x_last,
             "y_init": y_init,
             "y_last": y_last,
         }
         stage.update(kwargs.pop("stage", {}))
-
-        return ROI(name=name, stage=stage, **kwargs)
+        return stage

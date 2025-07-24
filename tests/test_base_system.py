@@ -77,12 +77,8 @@ async def check_fc_queue(
 
 @pytest.mark.asyncio
 async def test_temperature(BaseTestSequencer):
-    for t in [25, 37, 50]:
-        BaseTestSequencer.temperature(temperature=t)
-        for fc in BaseTestSequencer.enabled_flowcells:
-            await fc.TemperatureController.wait_for_temperature(
-                t, timeout=1, interval=0.01
-            )
+    for T, timeout in zip([25, 37, 50], [0, None, 1]):
+        BaseTestSequencer.temperature(temperature=T, timeout=timeout)
 
 
 @pytest.mark.asyncio
@@ -134,10 +130,14 @@ async def test_wait(BaseTestSequencerROIs, caplog):
     BaseTestSequencerROIs.hold(flowcells="A", duration=0.01 / 60)
     BaseTestSequencerROIs.image()
     # Check tasks queued
-    assert await check_fc_queue(BaseTestSequencerROIs, caplog, only_check_filled=True)
+    assert await check_fc_queue(
+        BaseTestSequencerROIs, caplog, timeout=5, only_check_filled=True
+    )
     # Start flowcells and check tasks completed, microscope will start in `check_fc_queue`
     BaseTestSequencerROIs.start("flowcells")
-    assert await check_fc_queue(BaseTestSequencerROIs, caplog, check_microscope=True)
+    assert await check_fc_queue(
+        BaseTestSequencerROIs, caplog, timeout=5, check_microscope=True
+    )
     # Check logs for correct sequence of events
     tasks = ["A using microscope", "B using microscope"]
     check_task_sequence(caplog, tasks)
@@ -148,7 +148,9 @@ async def test_image(BaseTestSequencerROIs, caplog):
     BaseTestSequencerROIs.pause("microscope")
     BaseTestSequencerROIs.image()
     # microscope will start in `check_fc_queue`
-    assert await check_fc_queue(BaseTestSequencerROIs, caplog, check_microscope=True)
+    assert await check_fc_queue(
+        BaseTestSequencerROIs, caplog, timeout=5, check_microscope=True
+    )
 
 
 @pytest.mark.asyncio
@@ -156,7 +158,9 @@ async def test_focus(BaseTestSequencerROIs, caplog):
     BaseTestSequencerROIs.pause("microscope")
     BaseTestSequencerROIs.focus()
     # microscope will start in `check_fc_queue`
-    assert await check_fc_queue(BaseTestSequencerROIs, caplog, check_microscope=True)
+    assert await check_fc_queue(
+        BaseTestSequencerROIs, caplog, timeout=5, check_microscope=True
+    )
 
 
 @pytest.mark.asyncio
@@ -164,7 +168,9 @@ async def test_expose(BaseTestSequencerROIs, caplog):
     BaseTestSequencerROIs.pause("microscope")
     BaseTestSequencerROIs.expose()
     # microscope will start in `check_fc_queue`
-    assert await check_fc_queue(BaseTestSequencerROIs, caplog, check_microscope=True)
+    assert await check_fc_queue(
+        BaseTestSequencerROIs, caplog, timeout=5, check_microscope=True
+    )
 
 
 @pytest.mark.parametrize(

@@ -1,57 +1,12 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from pyseq_core.utils import MACHINE_SETTINGS_PATH
+from pyseq_core.base_com import BaseCOM
 import yaml
 from attrs import define, field
 from typing import Union
 from functools import cached_property
-import time
 import asyncio
-
-
-@define
-class BaseCOM:
-    address: str = field()
-    lock: asyncio.Lock = field(factory=asyncio.Lock)
-    """
-    Abstract base class for communication interfaces.
-
-    Attributes:
-        address (str): The address of the communication interface.
-        lock (asyncio.Lock): An asyncio lock to ensure thread-safe access to the interface.
-    """
-
-    @abstractmethod
-    async def connect(self) -> bool:
-        """
-        Asynchronously establishes a connection to the communication interface.
-
-        Returns:
-            bool: True if the connection is successful, otherwise False.
-        """
-        async with self.lock:
-            pass
-
-    @abstractmethod
-    async def command(self, command: str) -> Union[str, dict]:
-        """
-        Asynchronously sends a command to the communication interface.
-
-        Args:
-            command (str): The command string to be sent.
-        """
-        async with self.lock:
-            pass
-
-    @abstractmethod
-    async def close(self) -> bool:
-        """
-        Asynchronously closee a connection to the communication interface.
-
-        Returns:
-            bool: True if the connection is gracefully closed, otherwise False.
-        """
-        async with self.lock:
-            pass
 
 
 @define
@@ -355,7 +310,7 @@ class BaseValve(BaseInstrument):
         physical valve to switch to the specified port.
 
         Args:
-            port (Union[str, int]): The identifier of the port to select.
+            port (Union[str, int]): The name or position of the port to select.
             **kwargs: Additional keyword arguments that might be specific to
                       a particular valve implementation (e.g., speed, timeout).
         Returns:
@@ -429,59 +384,138 @@ class BaseLaser(BaseInstrument):
     color: str = field()
     _power: Union[int, float] = field(init=False)
 
+    """Abstract base class for laser instruments.
+
+    This class extends `BaseInstrument` to define common properties and
+    abstract methods for controlling a laser, such as setting and reading the 
+    laser power.
+
+    Attributes:
+        color (str): The color of the laser beam (e.g., "red", "green", "blue").
+        _power (Union[int, float]): The current cached power setting of the 
+            laser. This attribute is not initialized directly but is set by the 
+            `power` setter.
+    """
+
     @cached_property
     def min_power(self):
+        """Returns the minimum allowed power for the laser.
+
+        This value is retrieved from the instrument's configuration, defaulting
+        to 0 if not specified.
+
+        Returns:
+            Union[int, float]: The minimum power value.
+        """
         return self.config.get("min_val", 0)
 
     @cached_property
     def max_power(self):
+        """Returns the maximum allowed power for the laser.
+
+        This value is retrieved from the instrument's configuration, defaulting
+        to 100 if not specified.
+
+        Returns:
+            Union[int, float]: The maximum power value.
+        """
         return self.config.get("max_val", 100)
 
     @abstractmethod
     async def set_power(self, power):
-        pass
+        """Sets the power of the laser.
+
+        This is an abstract asynchronous method that must be implemented by
+        subclasses to define how the laser's power is physically adjusted.
+
+        Args:
+            power (Union[int, float]): The desired power level to set.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
 
     @abstractmethod
-    def get_power(self):
-        pass
+    async def get_power(self):
+        """Retrieves the current power of the laser.
+
+        This is an abstract asynchronous method that must be implemented by subclasses to
+        define how the laser's current power setting is read, and then saved to
+        _power.
+
+        Returns:
+            Union[int, float]: The current power level of the laser.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
 
     @property
     def power(self):
+        """The current cached power setting of the laser.
+
+        This property provides read-only access to the laser's cached power.
+        To change the power, use the `set_power` method.
+
+        Returns:
+            Union[int, float]: The current power level.
+        """
         return self._power
-
-
-class BaseYStage(BaseStage):
-    pass
-
-
-class BaseXStage(BaseStage):
-    pass
-
-
-class BaseZStage(BaseStage):
-    pass
-
-
-class BaseObjectiveStage(BaseStage):
-    pass
 
 
 @define
 class BaseFilterWheel(BaseInstrument):
     _filters: dict = field(init=False)
     _filter: Union[float, str] = field(init=False)
+    """Abstract base class for filter wheel instruments.
+
+    This class extends `BaseInstrument` to define common properties and
+    abstract methods for selecting a filter from a filter wheel.
+
+    Attributes:
+        _filters (dict): A dictionary mapping filter names to their positions on
+            the filter wheel
+        _filter (Union[float, str]): The cached currently selected filter on the 
+            wheel.
+    """
 
     def __attrs_post_init__(self):
+        """Post-initialization hook for attrs.
+
+        This method is called automatically after the instance is initialized.
+        It populates the `_filters` attribute with the list of valid filters
+        retrieved from the instrument's configuration.
+        """
         self._filters = self.config.get("valid_list")
 
     @abstractmethod
-    async def set_filter(self, filter):
-        """Select a filter on the wheel."""
+    async def set_filter(self, filter: Union[float, str]):
+        """Selects a specific filter on the wheel.
+
+        This is an abstract asynchronous method that must be implemented by
+        subclasses to define how the filter wheel physically moves to the
+        desired filter and saves the filter to `_filter`.
+
+        Args:
+            filter (Union[float, str]): The identifier of the filter to select.
+                This could be a filter name (str) or an index (float/int).
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
         pass
 
     @property
     def filter(self):
-        """Get the cached filter."""
+        """The currently selected filter on the wheel.
+
+        This property provides read-only access to the cached value of the
+        currently active filter. To change the filter, use the `set_filter`
+        method.
+
+        Returns:
+            Union[float, str]: The identifier of the currently active filter.
+        """
         return self._filter
 
 
@@ -489,61 +523,167 @@ class BaseFilterWheel(BaseInstrument):
 class BaseShutter(BaseInstrument):
     _open: bool = field(init=False)
 
+    """Abstract base class for shutter instruments.
+
+    This class extends `BaseInstrument` to define common properties and
+    abstract methods for opening/closing a shutter.
+
+    Attributes:
+        _open (bool): An cached attribute indicating whether the shutter is
+            currently open (`True`) or closed (`False`). This should be accessed
+            via the `open` property.
+    """
+
     @abstractmethod
-    async def move(self, open: bool):
-        """Open the shutter."""
-        pass
+    async def move(self, open: bool = True):
+        """Moves the shutter to either an open or closed position.
+
+        This is an abstract asynchronous method that must be implemented by
+        subclasses to define how the shutter physically transitions to the
+        specified state, and saves the open state (True/False) to `_open`.
+
+        Args:
+            open (bool): If `True`, the shutter will move to the open position.
+                If `False`, it will move to the closed position.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
 
     @abstractmethod
     async def close(self):
-        """Close the shutter."""
-        pass
+        """Closes the shutter.
+
+        This is an abstract asynchronous method that must be implemented by
+        subclasses to define how the shutter physically closes and then sets
+        `_open` = False.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
 
     @property
-    def open(self):
-        """Position of shutter"""
-        self._open
+    def is_open(self):
+        """The cached current position of the shutter.
 
-    @open.setter
-    def open(self, open):
-        """Set position of shutter"""
-        self._open = open
+        This property provides read-only access to the cached state of whether
+        the shutter is open or closed.
+
+        Returns:
+            bool: `True` if the shutter is open, `False` if it is closed.
+        """
+        return self._open
 
 
 class BaseCamera(BaseInstrument):
     _exposure: float = field(init=False)
 
-    @abstractmethod
-    async def capture(self):
-        """Capture an image."""
-        pass
+    """Abstract base class for camera instruments.
+
+    This class extends `BaseInstrument` to define common properties and
+    abstract methods for cameras such as taking and saving an image.
+
+    Attributes:
+        _exposure (float): The current exposure time setting for the camera in
+            seconds. This is an cached attribute and should be accessed via
+            the `exposure` property.
+    """
 
     @abstractmethod
-    async def save_image(self, filepath):
-        """Get the captured image."""
+    async def capture(self):
+        """Captures an image using the camera.
+
+        This is an abstract asynchronous method that must be implemented by
+        subclasses to define how the camera acquires an image. Captured images
+        are assumed to be stored in the camera's internal memory.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
+
+    @abstractmethod
+    async def save_image(self, dirpath):
+        """Saves the captured image to a specified directory.
+
+        This is an abstract asynchronous method that must be implemented by
+        subclasses to define how the captured image data is written to disk.
+
+        Args:
+            dirpath (str): The full path including the filename and extension
+                where the image should be saved.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
         pass
 
     @abstractmethod
     async def set_exposure(self, time):
-        """Set the exposure time for the camera."""
+        """Sets the exposure time for the camera.
+
+        This is an abstract asynchronous method that must be implemented by
+        subclasses to define how the camera's exposure time is physically
+        adjusted.
+
+        Args:
+            time (float): The desired exposure time in seconds.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
         pass
 
     @abstractmethod
     async def get_exposure(self, time):
-        """Set the exposure time for the camera."""
+        """Retrieves the current exposure time from the camera.
+
+        This is an abstract asynchronous method that must be implemented by
+        subclasses to define how the camera's current exposure time is read and
+        then saved to `_exposure`.
+
+        Returns:
+            float: The current exposure time in seconds.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
         pass
 
     @property
     def exposure(self):
-        """Get cached exposure time"""
+        """The current cached exposure time of the camera.
+
+        This property provides read-only access to the cached value of the
+        camera's exposure time. To change the exposure, use the `set_exposure`
+        method.
+
+        Returns:
+            float: The current exposure time in seconds.
+        """
         self._exposure
 
     @cached_property
     def min_exposure(self):
+        """Returns the minimum allowed exposure time for the camera.
+
+        This value is retrieved from the instrument's configuration.
+
+        Returns:
+            Union[int, float, None]: The minimum exposure time value, or None
+                if not specified in the configuration.
+        """
         return self.config.get("min_val")
 
     @cached_property
     def max_exposure(self):
+        """Returns the maximum allowed exposure time for the camera.
+
+        This value is retrieved from the instrument's configuration.
+
+        Returns:
+            Union[int, float, None]: The maximum exposure time value, or None
+                if not specified in the configuration.
+        """
         return self.config.get("max_val")
 
 
@@ -551,32 +691,99 @@ class BaseCamera(BaseInstrument):
 class BaseTemperatureController(BaseInstrument):
     _temperature: Union[float, int] = field(init=False)
 
+    """Abstract base class for camera instruments.
+
+    This class extends `BaseInstrument` to define common properties and
+    abstract methods for temperature controllers such as setting and reading 
+    temperatures.
+
+    Attributes:
+        _temperature Union[float, int] : The current temperature set point for the temperature controller in
+            degrees Celsius. This is an cached attribute and should be accessed via
+            the `temperature` property.
+    """
+
     @cached_property
     def min_temperature(self):
+        """Returns the minimum allowed temperature for the temperature controller.
+
+        This value is retrieved from the instrument's configuration.
+
+        Returns:
+            Union[int, float, None]: The minimum temperature value, or None
+                if not specified in the configuration.
+        """
         return self.config.get("min_val")
 
     @cached_property
     def max_temperature(self):
+        """Returns the maximum allowed temperature for the temperature controller.
+
+        This value is retrieved from the instrument's configuration.
+
+        Returns:
+            Union[int, float, None]: The maximum temperature value, or None
+                if not specified in the configuration.
+        """
         return self.config.get("max_val")
 
     # Don't use property setter, can't use explicity with async
     # ie can't do `await temperature = t`
     @abstractmethod
-    async def set_temperature(self, temperature):
-        """Set the temperature of the device."""
-        pass
+    async def set_temperature(
+        self, temperature: float, timeout: Union[float, None] = 0.0
+    ):
+        """Sets the temperature set point for the temperature controller.
+
+        This is an abstract asynchronous method that must be implemented by
+        subclasses to define how the temperature setpoint is physically
+        adjusted. If `timeout` is not None, then wait for `timeout` seconds for
+        the temperature to reach the setpoint before raising TimeoutError with
+        `asyncio.wait_for` and `wait_for_temperature` method. If `timeout` == 0,
+        do not wait for the temperature to reach the setpoint (default behavior).
+
+        ```
+        if timeout == None or timeout > 0:
+            await asyncio.wait_for(self.wait_for_temperature(temperature), timeout)
+        ```
+
+        Args:
+            temperature (float): The temperature setpoint in degrees C.
+            timeout (float, None): Time in seconds to wait before raising TimeoutError
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
 
     # Don't use property getter, can't use explicity with async
     # ie can't do `await temperature`
     @abstractmethod
     async def get_temperature(self):
-        """Get the current temperature of the device."""
+        """Retrieves the temperature set point for the temperature controller.
+
+        This is an abstract asynchronous method that must be implemented by
+        subclasses to define how the actual temperature is read and then saved to
+        `_temperature`.
+
+        Returns:
+            float: The current temperature in degrees C.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
         pass
 
-    async def wait_for_temperature(self, temperature, timeout=None, interval=5):
-        """Wait for the system to reach a specified temperature."""
-        start = time.time()
-        while self.get_temperature != temperature:
-            if timeout is not None and start + timeout > time.time():
-                break
+    async def wait_for_temperature(self, temperature: float, interval: float = 5.0):
+        """Asynchronously wait for the temperature controller to reach the
+        temperature setpoint.
+
+        Args:
+            temperature (float): The temperature setpoint in degrees C.
+            interval (float): Time interval in seconds between checking temperature
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+        """
+
+        while await self.get_temperature != temperature:
             await asyncio.sleep(interval)

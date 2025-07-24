@@ -24,7 +24,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Set up .config/pyseq/logs
-      run: mkdir -p ~/.config/pyseq2500/logs
+      run: mkdir -p ~/.config/pyseq/logs
         
     - name: Test with python ${{ matrix.python-version }} and ${{ matrix.os }}
       run: uv run --frozen --dev pytest --cov=src --junit-xml pytest.xml

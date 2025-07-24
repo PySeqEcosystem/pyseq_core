@@ -4,19 +4,20 @@ from pydantic import (
     computed_field,
     PositiveInt,
     PositiveFloat,
+    NonNegativeFloat,
     field_validator,
     model_validator,
+    DirectoryPath,
 )
 from pyseq_core.utils import DEFAULT_CONFIG, HW_CONFIG, deep_merge
 from functools import cached_property
-from typing import Union, Any
+from typing import Union, Any, Type, Literal
 from math import ceil, copysign
 from warnings import warn
 import yaml
 import logging
 import tomlkit
 from typing_extensions import Self
-from pathlib import Path
 
 
 # Set up logging
@@ -34,6 +35,23 @@ def custom_params(config: dict) -> dict:
     return kwargs
 
 
+# def recursive_validate(query_dict, valid_dict):
+#     """Recursively validate fields in query dictionary.
+
+#     The query dictionary is validated againt a valid dictionary from a config file.
+#     Data can be validated between min/max values if min_val and max_val keys are in the config file.
+#     Or data can be validate to be in a list if a valid_list key is in the config file.
+
+#     """
+#     for k, v in query_dict.items():
+#         if isinstance(v, dict) and k in valid_dict and isinstance(valid_dict[k], dict):
+#             recursive_validate(v, valid_dict[k])
+#         elif "max_val" in valid_dict and "min_val" in valid_dict:
+#             validate_min_max(k, v, valid_dict)
+#         elif "valid_list" in valid_dict:
+#             validate_in(valid_dict[k], v)
+
+
 def recursive_validate(query_dict, valid_dict):
     """Recursively validate fields in query dictionary.
 
@@ -42,55 +60,73 @@ def recursive_validate(query_dict, valid_dict):
     Or data can be validate to be in a list if a valid_list key is in the config file.
 
     """
+
     for k, v in query_dict.items():
-        if isinstance(v, dict) and k in valid_dict and isinstance(valid_dict[k], dict):
-            recursive_validate(v, valid_dict[k])
-        elif "max_val" in valid_dict and "min_val" in valid_dict:
-            validate_min_max(k, v, valid_dict)
-        elif "valid_list" in valid_dict:
-            validate_in(valid_dict[k], v)
+        if k in valid_dict:
+            if isinstance(v, dict) and isinstance(valid_dict[k], dict):
+                recursive_validate(v, valid_dict[k])
+            elif "max_val" in valid_dict[k] and "min_val" in valid_dict[k]:
+                validate_min_max(k, v, valid_dict)
+            elif "valid_list" in valid_dict:
+                validate_in(k, v, valid_dict)
 
 
 def validate_min_max(
-    instrument: str, value: Union[int, float], valid_dict=HW_CONFIG
+    parameter: str, value: Union[int, float], valid_dict=HW_CONFIG
 ) -> Union[int, float]:
     """Validate value to be between min/max values for a specific instrument.
 
     The valid_dict should have the structure:
-    {instrument: {min_val: some_min_value,
-                  max_val: some_max_value}
+    {parameter: {min_val: some_min_value,
+                 max_val: some_max_value}
 
     """
 
-    min_val = valid_dict[instrument]["min_val"]
-    max_val = valid_dict[instrument]["max_val"]
-    units = valid_dict[instrument].get("units", "")
+    min_val = valid_dict[parameter]["min_val"]
+    max_val = valid_dict[parameter]["max_val"]
+    units = valid_dict[parameter].get("units", "")
 
     if min_val <= value <= max_val:
         return value
     else:
-        msg = f"{instrument} value should be between {min_val} and {max_val} {units}"
+        msg = f"{parameter} value ({value}) should be between {min_val} and {max_val} {units}"
         LOGGER.error(msg)
         raise ValueError(msg)
 
 
-def validate_in(valid_list: list, value: Any) -> Any:
+def validate_in(parameter: Any, value: Any, valid_dict: dict) -> Any:
     """Validate value to be in a valid list."""
-    if value in valid_list:
+    if value in valid_dict[parameter]["valid_list"]:
         return value
     else:
-        msg = f"{value} not in valid list"
+        msg = f"{parameter} value ({value}) not in valid list"
         LOGGER.error(msg)
         raise ValueError(msg)
 
 
-def validate_path(value: str) -> str:
-    if Path(value).exists():
-        return value
-    else:
-        msg = f"{value} does not exist"
-        LOGGER.error(msg)
-        raise ValueError
+# def validate_path(value: str) -> str:
+#     if Path(value).exists():
+#         return value
+#     else:
+#         msg = f"{value} does not exist"
+#         LOGGER.error(msg)
+#         raise ValueError
+
+
+## Consider rewriting class factories like this
+# class BaseROIFactory:
+#     def __init__(self, config):
+#         self.config = config
+#     def __call__(self, name: str, flowcell: str = None, **kwargs):
+#         # Simplified for example
+#         class DynamicROI:
+#             def __init__(self, name, flowcell=None, **kwargs):
+#                 self.name = name
+#                 self.stage = type('Stage', (object,), {'flowcell': flowcell})()
+#                 self.kwargs = kwargs
+#             def __repr__(self):
+#                 return f"DynamicROI(name='{self.name}', flowcell='{self.stage.flowcell}', kwargs={self.kwargs})"
+#         return DynamicROI(name, flowcell, **kwargs)
 
 
 class BaseStagePosition(BaseModel):
@@ -106,8 +142,8 @@ class BaseStagePosition(BaseModel):
     z_step: PositiveInt = HW_CONFIG["ZStage"][
         "step"
     ]  # Not a cached_property because want to change easily
-    x_overlap: PositiveFloat = 0.0
-    y_overlap: PositiveFloat = 0.0
+    x_overlap: NonNegativeFloat = 0.0
+    y_overlap: NonNegativeFloat = 0.0
 
     @computed_field
     @property
@@ -182,21 +218,21 @@ class BaseStagePosition(BaseModel):
     @field_validator("x_init", "x_last", mode="after")
     @classmethod
     def validate_x_pos(cls, value: int) -> int:
-        return validate_min_max("XStage", value)
+        return validate_min_max("position", value, HW_CONFIG["XStage"])
 
     @field_validator("y_init", "y_last", mode="after")
     @classmethod
     def validate_y_pos(cls, value: int) -> int:
-        return validate_min_max("YStage", value)
+        return validate_min_max("position", value, HW_CONFIG["YStage"])
 
     @field_validator("z_init", mode="after")
     @classmethod
     def validate_z_pos(cls, value: int) -> int:
-        return validate_min_max("ZStage", value)
+        return validate_min_max("position", value, HW_CONFIG["ZStage"])
 
     @model_validator(mode="after")
     def validate_stage_positions(self) -> Self:
-        validate_min_max("ZStage", self.z_last)
+        validate_min_max("position", self.z_last, HW_CONFIG["ZStage"])
         return self
 
 
@@ -210,133 +246,263 @@ class BaseSimpleStage(BaseModel):
     @field_validator("x", mode="after")
     @classmethod
     def validate_x_pos(cls, value: int) -> int:
-        return validate_min_max("XStage", value)
+        return validate_min_max("position", value, HW_CONFIG["XStage"])
 
     @field_validator("y", mode="after")
     @classmethod
     def validate_y_pos(cls, value: int) -> int:
-        return validate_min_max("YStage", value)
+        return validate_min_max("position", value, HW_CONFIG["YStage"])
 
     @field_validator("z", mode="after")
     @classmethod
     def validate_z_pos(cls, value: int) -> int:
-        return validate_min_max("ZStage", value)
+        return validate_min_max("position", value, HW_CONFIG["ZStage"])
 
 
-def StageFactory(exp_config: dict) -> BaseModel:
-    """Custom validated stage position information to tile over ROI with default values."""
-    config = exp_config["stage"]
-    config.update({"nz": exp_config["image"]["nz"]})
-    StageParams = create_model("StageParams", **custom_params(config))
+class StageFactory:
+    @classmethod
+    def factory(cls, exp_config: dict = {}) -> Type[BaseStagePosition]:
+        config = exp_config.get("stage", {})
+        config.update({"nz": exp_config["image"]["nz"]})
 
-    class StagePosition(StageParams, BaseStagePosition):
-        pass
+        ExtraStageParams = create_model("ExtraStageParams", **custom_params(config))
 
-        @model_validator(mode="after")
-        def validate_stage(self) -> Self:
-            self_dict = self.model_dump()
-            recursive_validate(self_dict, HW_CONFIG["stage"])
-            return self
+        class StagePosition(ExtraStageParams, BaseStagePosition):
+            pass
 
-    return StagePosition
+            @model_validator(mode="after")
+            def validate_stage(self) -> Self:
+                self_dict = self.model_dump()
+                recursive_validate(self_dict, HW_CONFIG["stage"])
+                return self
 
-
-def SimpleStageFactory(exp_config: dict) -> BaseModel:
-    """Validated X,Y,Z and any extra stage coordinates."""
-    config = exp_config["stage"]
-    # config.update({'nz': exp_config['image']['nz']})
-    SimpleStageParams = create_model("StageParams", **custom_params(config))
-
-    class SimpleStage(SimpleStageParams, BaseSimpleStage):
-        pass
-
-        @model_validator(mode="after")
-        def validate_stage(self) -> Self:
-            self_dict = self.model_dump()
-            recursive_validate(self_dict, HW_CONFIG["stage"])
-            return self
-
-    return SimpleStage
+        return StagePosition
 
 
-OpticsParams = create_model("OpticsParams", **custom_params(DEFAULT_CONFIG["optics"]))
+# def StageFactory(exp_config: dict) -> BaseModel:
+#     """Custom validated stage position information to tile over ROI with default values."""
+#     config = exp_config["stage"]
+#     config.update({"nz": exp_config["image"]["nz"]})
+#     StageParams = create_model("StageParams", **custom_params(config))
+
+#     class StagePosition(StageParams, BaseStagePosition):
+#         pass
+
+#         @model_validator(mode="after")
+#         def validate_stage(self) -> Self:
+#             self_dict = self.model_dump()
+#             recursive_validate(self_dict, HW_CONFIG["stage"])
+#             return self
+
+#     return StagePosition
+ExtraStageParams = create_model("ExtraStageParams", **custom_params(DEFAULT_CONFIG))
 
 
-class Optics(OpticsParams):
-    """Custom validated optical parameters"""
-
-    pass
-
-
-def ImageParamsFactory(exp_config: dict) -> BaseModel:
-    """Custom validated optical parameters for imaging, number of z planes, and output directory."""
-
-    class ImageParams(BaseModel):
-        optics: Optics = Optics(**exp_config["image"])
-        output: str = exp_config["experiment"]["images_path"]
-        nz: int = exp_config["image"]["nz"]
-
-        @field_validator("output", mode="after")
-        def validate_ouput(cls, value: str) -> str:
-            return validate_path(value)
-
-    return ImageParams
+class SimpleStage(ExtraStageParams, BaseSimpleStage):
+    @model_validator(mode="after")
+    def validate_stage(self) -> Self:
+        self_dict = self.model_dump()
+        recursive_validate(self_dict, HW_CONFIG["stage"])
+        return self
 
 
-def FocusParamsFactory(exp_config: dict) -> BaseModel:
-    """Custom validated optical parameters for focusing, validated focus routine, and output directory."""
+SimpleStageType = Type[SimpleStage]
 
-    class FocusParams(BaseModel):
-        optics: Optics = Optics(**exp_config["focus"])
-        routine: str = exp_config["focus"]["routine"]
-        output: str = exp_config["experiment"]["focus_path"]
-        z_focus: Union[int, float] = -1
+# def SimpleStageFactory(exp_config: dict) -> BaseModel:
+#     """Validated X,Y,Z and any extra stage coordinates."""
+#     config = exp_config["stage"]
+#     # config.update({'nz': exp_config['image']['nz']})
+#     SimpleStageParams = create_model("StageParams", **custom_params(config))
 
-        @field_validator("routine", mode="after")
-        def validate_routine(cls, value):
-            if value not in ["full once", "partial once", "full", "partial"]:
-                raise ValueError("Invalid autofocusing routine")
+#     class SimpleStage(SimpleStageParams, BaseSimpleStage):
+#         pass
 
-    return FocusParams
+#         @model_validator(mode="after")
+#         def validate_stage(self) -> Self:
+#             self_dict = self.model_dump()
+#             recursive_validate(self_dict, HW_CONFIG["stage"])
+#             return self
 
-
-def ExposeParamsFactory(exp_config: dict) -> BaseModel:
-    """Custom validated optical parameters for exposing and number of exposures."""
-
-    class ExposeParams(BaseModel):
-        optics: Optics = Optics(**exp_config["expose"])
-        n_exposures: int = exp_config["expose"]["n_exposures"]
-
-    return ExposeParams
+#     return SimpleStage
 
 
-def BaseROIFactory(exp_config: dict) -> BaseModel:
-    """Custom validated stage, optical, and other parameters to image/focus/expose ROI"""
-    StagePosition = StageFactory(exp_config)
-    ImageParams = ImageParamsFactory(exp_config)
-    FocusParams = FocusParamsFactory(exp_config)
-    ExposeParams = ExposeParamsFactory(exp_config)
+# class BaseOpticsParams(BaseModel):
+#     """Empty pydantic BaseModel to hold sequencer specific optical parameters"""
+#     pass
+UnvalidateOpticsParams = create_model(
+    "OpticsParams", **custom_params(DEFAULT_CONFIG["optics"])
+)
 
-    class Stage(StagePosition):
-        pass
 
-    class Image(ImageParams):
-        pass
+class OpticsParams(UnvalidateOpticsParams):
+    @model_validator(mode="after")
+    def validate_optics(self) -> Self:
+        self_dict = self.model_dump()
+        recursive_validate(self_dict, HW_CONFIG["optics"])
+        return self
 
-    class Focus(FocusParams):
-        pass
 
-    class Expose(ExposeParams):
-        pass
+BaseOpticsParams = Type[OpticsParams]
 
-    class ROI(BaseModel):
-        name: str
-        stage: Stage
-        image: Image = ImageParams()
-        focus: Focus = FocusParams()
-        expose: Expose = ExposeParams()
+# class OpticsFactory:
+#     @classmethod
+#     def factory(cls, exp_config: dict = {}) -> BaseOpticsParams:
+#         # DefaultOpticsParams = create_model("OpticsParams", **custom_params(DEFAULT_CONFIG["optics"]))
+#         return OpticsParams(**exp_config)
 
-    return ROI
+
+# BaseOpticsParams = create_model("OpticsParams", **custom_params(DEFAULT_CONFIG["optics"]))
+# class Optics(OpticsParams):
+#     """Custom validated optical parameters"""
+
+#     pass
+
+
+class ImageParams(BaseModel):
+    optics: OpticsParams | None
+    output: DirectoryPath | None
+    nz: int | None
+
+    @classmethod
+    def factory(cls, exp_config: dict) -> Self:
+        optics = OpticsParams(**exp_config["image"]["optics"])
+        output = exp_config["experiment"].get("images_path", ".")
+        nz = exp_config["image"]["nz"]
+        return cls(optics=optics, output=output, nz=nz)
+
+
+# def ImageParamsFactory(exp_config: dict) -> BaseModel:
+#     """Custom validated optical parameters for imaging, number of z planes, and output directory."""
+
+#     class ImageParams(BaseModel):
+#         optics: BaseOpticsParams = OpticsFactory.factory(exp_config["image"])
+#         output: str = exp_config["experiment"]["images_path"]
+#         nz: int = exp_config["image"]["nz"]
+
+#         @field_validator("output", mode="after")
+#         def validate_ouput(cls, value: str) -> str:
+#             return validate_path(value)
+
+#     return ImageParams
+
+AF_ROUTINES = DEFAULT_CONFIG["auto_focus_routines"]["routines"]
+
+
+class FocusParams(BaseModel):
+    optics: OpticsParams | None
+    routine: Literal[*AF_ROUTINES] | None  # type: ignore
+    output: DirectoryPath | None
+    z_focus: Union[int, float] = -1
+
+    @classmethod
+    def factory(cls, exp_config: dict = {}) -> Self:
+        optics = OpticsParams(**exp_config["focus"]["optics"])
+        routine = exp_config["focus"]["routine"]
+        output = exp_config["experiment"]["focus_path"]
+
+        return cls(optics=optics, routine=routine, output=output)
+
+
+# def FocusParamsFactory(exp_config: dict) -> BaseModel:
+#     """Custom validated optical parameters for focusing, validated focus routine, and output directory."""
+
+#     class FocusParams(BaseModel):
+#         optics: BaseOpticsParams = OpticsParams(**exp_config["focus"])
+#         routine: str = exp_config["focus"]["routine"]
+#         output: str = exp_config["experiment"]["focus_path"]
+#         z_focus: Union[int, float] = -1
+
+#         @field_validator("routine", mode="after")
+#         def validate_routine(cls, value):
+#             if value not in ["full once", "partial once", "full", "partial"]:
+#                 raise ValueError("Invalid autofocusing routine")
+
+#     return FocusParams
+
+
+class ExposeParams(BaseModel):
+    optics: OpticsParams | None
+    n_exposures: int | None
+
+    @classmethod
+    def factory(cls, exp_config: dict = {}) -> Self:
+        optics = OpticsParams(**exp_config["expose"]["optics"])
+        n_exposures = exp_config["expose"]["n_exposures"]
+        return cls(optics=optics, n_exposures=n_exposures)
+
+
+# def ExposeParamsFactory(exp_config: dict) -> BaseModel:
+#     """Custom validated optical parameters for exposing and number of exposures."""
+
+#     class ExposeParams(BaseModel):
+#         optics: BaseOpticsParams = OpticsParams(**exp_config["expose"])
+#         n_exposures: int = exp_config["expose"]["n_exposures"]
+
+#     return ExposeParams
+
+
+class BaseROI(BaseModel):
+    name: str
+    stage: BaseStagePosition
+    image: ImageParams
+    focus: FocusParams
+    expose: ExposeParams
+
+    @classmethod
+    def merge_defaults(
+        cls, name: str, stage: dict, extra_params: dict = {}
+    ) -> BaseModel:
+        # Shallow update stage position parameters with extra parameters
+        stage.update(extra_params.pop("stage", {}))
+        # Get default parameters
+        roi = cls(name=name, stage=stage)
+        roi_dict = roi.model_dump()
+        # Deep update extra kwargs into roi_dict
+        roi_dict = deep_merge(extra_params, roi_dict)
+        return cls(**roi_dict)
+
+
+class ROIFactory:
+    @classmethod
+    def factory(cls, exp_config: dict = {}) -> Type[BaseROI]:
+        StagePosition = StageFactory.factory(exp_config)
+
+        class ROI(BaseROI):
+            stage: StagePosition  # type: ignore
+            image: ImageParams = ImageParams.factory(exp_config)
+            focus: FocusParams = FocusParams.factory(exp_config)
+            expose: ExposeParams = ExposeParams.factory(exp_config)
+
+        return ROI
+
+
+# def BaseROIFactory(exp_config: dict) -> BaseModel:
+#     """Custom validated stage, optical, and other parameters to image/focus/expose ROI"""
+#     StagePosition = StageFactory.factory(exp_config)
+#     ImageParams = ImageParams.factory(exp_config)
+#     FocusParams = FocusParams.factory(exp_config)
+#     ExposeParams = ExposeParams.factory(exp_config)
+
+#     class Stage(StagePosition):
+#         pass
+
+#     class Image(ImageParams):
+#         pass
+
+#     class Focus(FocusParams):
+#         pass
+
+#     class Expose(ExposeParams):
+#         pass
+
+#     class ROI(BaseModel):
+#         name: str
+#         stage: Stage
+#         image: Image = ImageParams()
+#         focus: Focus = FocusParams()
+#         expose: Expose = ExposeParams()
+
+#     return ROI
 
 
 class ValveCommand(BaseModel):
@@ -347,7 +513,7 @@ class ValveCommand(BaseModel):
 
     @model_validator(mode="after")
     def validate_port(self) -> Self:
-        validate_in(HW_CONFIG[f"Valve{self.flowcell}"]["valid_list"], self.port)
+        validate_in("port", self.port, HW_CONFIG[f"Valve{self.flowcell}"])
         return self
 
 
@@ -355,11 +521,16 @@ class TemperatureCommand(BaseModel):
     """Validated command to set the flowcell temperature."""
 
     temperature: float
-    flowcell: Union[str, int] = None
+    timeout: NonNegativeFloat | None = 0
+    flowcell: Union[str, int, None] = None
 
     @model_validator(mode="after")
     def validate_temperature(self) -> Self:
-        validate_min_max(f"TemperatureController{self.flowcell}", self.temperature)
+        validate_min_max(
+            "temperature",
+            self.temperature,
+            HW_CONFIG[f"TemperatureController{self.flowcell}"],
+        )
         return self
 
 
@@ -367,22 +538,22 @@ class HoldCommand(BaseModel):
     """Command to hold/incubate flowcell for specied duration (s)."""
 
     duration: PositiveFloat
-    flowcell: Union[str, int] = None
+    flowcell: Union[str, int] | None = None
 
 
 class WaitCommand(BaseModel):
     """Command to pause flowcell until the microscope to available."""
 
     event: str = "microscope"
-    flowcell: Union[str, int] = None
+    flowcell: Union[str, int] | None = None
 
 
 class UserCommand(BaseModel):
     """Command to pause flowcell until a user confirms a message."""
 
     message: str
-    timeout: PositiveFloat = None
-    flowcell: Union[str, int] = None
+    timeout: PositiveFloat | None = None
+    flowcell: Union[str, int, None] = None
 
 
 class BasePumpCommand(BaseModel):
@@ -406,26 +577,49 @@ class BasePumpCommand(BaseModel):
             )
         validate_min_max("volume", self.volume, HW_CONFIG[f"Pump{self.flowcell}"])
         if isinstance(self.reagent, int):
-            validate_in(HW_CONFIG[f"Valve{self.flowcell}"]["valid_list"], self.reagent)
+            validate_in("port", self.reagent, HW_CONFIG[f"Valve{self.flowcell}"])
         return self
 
 
-def PumpCommandFactory(exp_config) -> BaseModel:
-    """Custom partially validated command to pump a reagent. '
+class PumpCommandFactory:
+    """Create custom partially validated command to pump a reagent. '
 
     Volume in uL and flow rate in uL/min are validated.
     Reagent is not validated.
     """
-    UserPumpParams = create_model("UserPumpParams", **custom_params(exp_config["pump"]))
 
-    class PumpCommand(UserPumpParams, BasePumpCommand):
-        @model_validator(mode="after")
-        def validate_pump(self) -> Self:
-            self_dict = self.model_dump()
-            recursive_validate(self_dict, HW_CONFIG[f"Pump{self.flowcell}"])
-            return self
+    @classmethod
+    def factory(cls, exp_config: dict = {}) -> Type[BasePumpCommand]:
+        UserPumpParams = create_model(
+            "UserPumpParams", **custom_params(exp_config["pump"])
+        )
 
-    return PumpCommand
+        class PumpCommand(UserPumpParams, BasePumpCommand):
+            @model_validator(mode="after")
+            def validate_pump(self) -> Self:
+                self_dict = self.model_dump()
+                recursive_validate(self_dict, HW_CONFIG[f"Pump{self.flowcell}"])
+                return self
+
+        return PumpCommand
+
+
+# def  PumpCommandFactory(exp_config) -> BaseModel:
+#     """Custom partially validated command to pump a reagent. '
+
+#     Volume in uL and flow rate in uL/min are validated.
+#     Reagent is not validated.
+#     """
+#     UserPumpParams = create_model("UserPumpParams", **custom_params(exp_config["pump"]))
+
+#     class PumpCommand(UserPumpParams, BasePumpCommand):
+#         @model_validator(mode="after")
+#         def validate_pump(self) -> Self:
+#             self_dict = self.model_dump()
+#             recursive_validate(self_dict, HW_CONFIG[f"Pump{self.flowcell}"])
+#             return self
+
+#     return PumpCommand
 
 
 def simple_txt_to_yaml(file_path: str) -> dict:
@@ -527,16 +721,13 @@ def check_pump(
     if isinstance(params, dict):
         command = PumpCommand(flowcell=flowcell, **params)
     else:
-        command = PumpCommand(flowcell=flowcell, volume=params, flow_rate=0)
+        command = PumpCommand(flowcell=flowcell, volume=params)
 
     return command.model_dump()
 
 
 def check_image(
-    params: Union[dict, int],
-    ImageParams: BaseModel,
-    FocusParams: BaseModel,
-    StagePosition: BaseModel,
+    exp_config: dict, params: Union[dict, int], StagePosition: BaseStagePosition
 ) -> dict:
     """Check and format image command.
 
@@ -565,17 +756,26 @@ def check_image(
 
     """
 
+    defaults = exp_config.copy()
+
     # Get default nz in experiment config to override protocol nz
-    if StagePosition.model_fields["nz"].default > 0:
-        nz = StagePosition.model_fields["nz"].default
+    if exp_config["image"]["nz"] > 0:
+        nz = exp_config["image"]["nz"]
     else:
         nz = None
+
+    # Get default nz in experiment config to override protocol nz
+    # if StagePosition.model_fields["nz"].default > 0:
+    #     nz = StagePosition.model_fields["nz"].default
+    # else:
+    #     nz = None
 
     # Format parameters from protocol
     if isinstance(params, dict):
         ptype = dict
         # params is dictionary = optics and image param key/value, nz is not overrided
-        dict_command = ImageParams(**params).model_dump()  # Validate parameters
+        defaults.update(params)
+        dict_command = ImageParams.factory(defaults).model_dump()  # Validate parameters
         if nz is not None:
             # Overide protocol nz  with experiment nz
             dict_command.update({"nz": nz})
@@ -583,58 +783,63 @@ def check_image(
         ptype = int
         # params is int = number of z planes
         if nz is None:
-            dict_command = ImageParams(nz=params).model_dump()
+            defaults["image"].update({"nz": params})
         else:
-            # Overide protocol nz  with experiment nzs
-            dict_command = ImageParams(nz=nz).model_dump()
+            # Overide protocol nz  with experiment nz
+            defaults["image"].update({"nz": nz})
+        dict_command = ImageParams.factory(defaults).model_dump()
     elif params is None and nz is None:
         # nz was never specified, raise Error
         raise KeyError("Number of z planes to image, nz, is not specified")
 
+    # TODO test this, it probably does not update default stage params with stage params specified in protocol file
     # Check stage commands
     if ptype is dict and "stage" in params:
-        stage = StagePosition(params["stage"])
-        dict_stage = stage.model_dump()
+        dict_stage = StagePosition(params["stage"]).model_dump()
         dict_command.update({"stage": dict_stage})
 
+    # TODO test this, it probably does not update default focus params with focus params specified in protocol file
     # Check focus commands
     if ptype is dict and "focus" in params:
-        focus = FocusParams(params["focus"])
-        dict_focus = focus.model_dump()
-        deep_merge(dict_focus["optics"], dict_command["focus"]["optics"])
-
+        dict_focus = FocusParams.factory(defaults).model_dump()
+        dict_command.update({"focus": dict_focus})
+        # deep_merge(dict_focus["optics"], dict_command["focus"]["optics"])
     return dict_command
 
 
 def check_expose(
-    params: Union[dict, int], ExposeParams: BaseModel, StagePosition: BaseModel
+    exp_config: dict, params: Union[dict, int], StagePosition: BaseStagePosition
 ) -> dict:
+    defaults = exp_config.copy()
+
     # Get default n_exposures in experiment config to override protocol n_exposures
-    if ExposeParams.model_fields["n_exposures"].default > 0:
-        n_exposures = ExposeParams.model_fields["n_exposures"].default
-    else:
-        n_exposures = None
+    n_exposures = defaults["expose"]["n_exposures"]
 
     # Format parameters from protocol
     if isinstance(params, dict):
-        ptype = dict
         # params is dictionary = optics and expose param key/value
-        dict_command = ExposeParams(**params).model_dump()  # Validate parameters
-        if n_exposures is not None:
+        ptype = dict
+        defaults.update(params)
+        dict_command = ExposeParams.factory(
+            defaults
+        ).model_dump()  # Validate parameters
+        if n_exposures > 0:
             # Overide protocol n_exposures with experiment config n_exposures
             dict_command.update({"n_exposures": n_exposures})
     elif isinstance(params, int):
-        ptype = int
         # params is int = number of exposures
-        if n_exposures is None:
-            dict_command = ExposeParams(n_exposures=params).model_dump()
+        ptype = int
+        if n_exposures == 0:
+            defaults["expose"].update({"n_exposures": params})
         else:
             # Overide protocol n_exposures with experiment config n_exposures
-            dict_command = ExposeParams(n_exposures=n_exposures).model_dump()
+            defaults["expose"].update({"n_exposures": n_exposures})
+        dict_command = ExposeParams(defaults).model_dump()
     elif params is None and n_exposures is None:
         # nz was never specified, raise Error
         raise KeyError("Number of exposures, n_exposures, is not specified")
 
+    # TODO test this, it probably does not update default stage params with stage params specified in protocol file
     # Check stage commands
     if ptype is dict and "stage" in params:
         stage = StagePosition(params["stage"])
@@ -648,11 +853,11 @@ def dispatch_commmand_formatter(
     flowcell: str, exp_config: dict, command: str, params: Any, last_port: str
 ) -> dict:
     # # Create default parameters from user exp_config
-    StagePosition = StageFactory(exp_config)
-    ImageParams = ImageParamsFactory(exp_config)
-    FocusParams = FocusParamsFactory(exp_config)
-    ExposeParams = ExposeParamsFactory(exp_config)
-    PumpCommand = PumpCommandFactory(exp_config)
+    StagePosition = StageFactory.factory(exp_config)
+    # ImageParams = ImageParams.factory(exp_config)
+    # FocusParams = FocusParams.factory(exp_config)
+    # ExposeParams = ExposeParams.factory(exp_config)
+    PumpCommand = PumpCommandFactory.factory(exp_config)
 
     # Format Commands
     if command in "VALVE":
@@ -671,9 +876,9 @@ def dispatch_commmand_formatter(
     elif command in "USER":
         fparams = check_user(flowcell, params)
     elif command in "IMAGE":
-        fparams = check_image(params, ImageParams, FocusParams, StagePosition)
+        fparams = check_image(exp_config, params, StagePosition)
     elif command in "EXPOSE":
-        fparams = check_expose(params, ExposeParams, StagePosition)
+        fparams = check_expose(exp_config, params, StagePosition)
     else:
         raise KeyError(f"Unknown command {command}.")
 
