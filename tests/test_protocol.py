@@ -2,7 +2,6 @@ import pytest
 import importlib
 from shutil import copyfile
 import tomlkit
-from pathlib import Path
 
 
 @pytest.mark.asyncio
@@ -36,7 +35,7 @@ async def test_protocol(BaseTestSequencer, tmp_path):
     paths = ["images", "focus", "log"]
     for p in paths:
         assert (tmp_path / exp_name / p).exists()
-    assert Path("~/.config/pyseq/logs/pyseq.log").expanduser().exists()
+    assert (tmp_path / exp_name / f"log/{exp_name}.log").exists()
 
     # Check protocol is queued
     assert len(BaseTestSequencer.flowcells["A"]._queue_dict) > 0
