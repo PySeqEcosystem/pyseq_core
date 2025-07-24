@@ -162,7 +162,7 @@ class ROIManager:
         """
         return self.flowcells[flowcell].ROIs
 
-    def add(self, roi: DefaultROI = None, exp_config: dict = None, **kwargs) -> bool:
+    def add(self, roi: ROIType = None, exp_config: dict = None, **kwargs) -> bool:
         """Adds a Region of Interest (ROI) to a flowcell.
 
         If an `roi` object is provided, it is added directly. Otherwise, a new
@@ -203,7 +203,7 @@ class ROIManager:
             warn(msg, UserWarning)
             return False
 
-    def update(self, roi: DefaultROI):
+    def update(self, roi: ROIType):
         """Updates an existing Region of Interest (ROI) on a flowcell.
 
         If an ROI with the same name exists on the target flowcell, it is

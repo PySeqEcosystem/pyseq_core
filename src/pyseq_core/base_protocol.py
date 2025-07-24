@@ -359,9 +359,9 @@ BaseOpticsParams = Type[OpticsParams]
 
 
 class ImageParams(BaseModel):
-    optics: Union[OpticsParams, None]
-    output: DirectoryPath = "."
-    nz: Union[int, None] = 0
+    optics: OpticsParams | None
+    output: DirectoryPath | None
+    nz: int | None
 
     @classmethod
     def factory(cls, exp_config: dict) -> Self:
@@ -385,13 +385,13 @@ class ImageParams(BaseModel):
 
 #     return ImageParams
 
+AF_ROUTINES = DEFAULT_CONFIG["auto_focus_routines"]["routines"]
+
 
 class FocusParams(BaseModel):
-    optics: Union[OpticsParams, None]
-    routine: Literal[*DEFAULT_CONFIG["auto_focus_routines"]["routines"]] = (
-        DEFAULT_CONFIG["auto_focus_routines"]["routines"][0]
-    )  # type: ignore
-    output: DirectoryPath = "."
+    optics: OpticsParams | None
+    routine: Literal[*AF_ROUTINES] | None  # type: ignore
+    output: DirectoryPath | None
     z_focus: Union[int, float] = -1
 
     @classmethod
@@ -421,8 +421,8 @@ class FocusParams(BaseModel):
 
 
 class ExposeParams(BaseModel):
-    optics: Union[OpticsParams, None]
-    n_exposures: Union[int, None]
+    optics: OpticsParams | None
+    n_exposures: int | None
 
     @classmethod
     def factory(cls, exp_config: dict = {}) -> Self:
@@ -521,8 +521,8 @@ class TemperatureCommand(BaseModel):
     """Validated command to set the flowcell temperature."""
 
     temperature: float
-    timeout: Union[None, NonNegativeFloat] = 0
-    flowcell: Union[str, int] = None
+    timeout: NonNegativeFloat | None = 0
+    flowcell: Union[str, int, None] = None
 
     @model_validator(mode="after")
     def validate_temperature(self) -> Self:
@@ -538,22 +538,22 @@ class HoldCommand(BaseModel):
     """Command to hold/incubate flowcell for specied duration (s)."""
 
     duration: PositiveFloat
-    flowcell: Union[str, int] = None
+    flowcell: Union[str, int] | None = None
 
 
 class WaitCommand(BaseModel):
     """Command to pause flowcell until the microscope to available."""
 
     event: str = "microscope"
-    flowcell: Union[str, int] = None
+    flowcell: Union[str, int] | None = None
 
 
 class UserCommand(BaseModel):
     """Command to pause flowcell until a user confirms a message."""
 
     message: str
-    timeout: Union[PositiveFloat, None] = None
-    flowcell: Union[str, int] = None
+    timeout: PositiveFloat | None = None
+    flowcell: Union[str, int, None] = None
 
 
 class BasePumpCommand(BaseModel):
