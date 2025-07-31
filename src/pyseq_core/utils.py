@@ -3,6 +3,7 @@ from pathlib import Path
 import tomlkit
 import yaml
 import os
+import shutil
 import importlib
 import logging
 import logging.config  # Need to import, or I get an AttributeError?
@@ -16,7 +17,9 @@ LOGGER = logging.getLogger("PySeq")
 # --- MACHINE_SETTINGS Configuration ---
 # This section handles the loading of machine-specific hardware configurations.
 # Local machine specific settings
+RESOURCE_PATH = importlib.resources.files("pyseq_core")
 MACHINE_SETTINGS_PATH = Path.home() / ".config/pyseq/machine_settings.yaml"
+MACHINE_SETTINGS_RESOURCE = RESOURCE_PATH.joinpath("resources/machine_settings.yaml")
 """Path to the machine-specific hardware configuration YAML file.
 
 This YAML file stores hardware configurations and settings for all the
@@ -25,14 +28,15 @@ stored in one file. The top-level key `name` specifies which sequencer or
 version to use, and its corresponding settings are loaded into `HW_CONFIG`.
 
 If the file does not exist at `~/.config/pyseq/machine_settings.yaml`,
-settings from the `pyseq_core` package resources will be used as a fallback.
+settings from the `pyseq_core` package resources will be copied and used as a fallback.
 """
 
 if not MACHINE_SETTINGS_PATH.exists():
-    # Use settings from package if local machine setting do not exist
-    MACHINE_SETTINGS_PATH = importlib.resources.files("pyseq_core").joinpath(
-        "resources/machine_settings.yaml"
-    )
+    # Copy settings from package if local machine setting do not exist
+    os.makedirs(MACHINE_SETTINGS_PATH.parent, exist_ok=True)
+    os.makedirs(MACHINE_SETTINGS_PATH.parent / "logs", exist_ok=True)
+    resource_path = importlib.resources.files("pyseq_core")
+    shutil.copy(MACHINE_SETTINGS_RESOURCE, MACHINE_SETTINGS_PATH)
 
 with open(MACHINE_SETTINGS_PATH, "r") as f:
     all_settings = yaml.safe_load(f)  # Machine config
@@ -44,18 +48,21 @@ This is loaded from the `MACHINE_SETTINGS_PATH` YAML file, specifically the
 section identified by the `name` key in that file.
 """
 
-"""MACHINE_SETTINGS at ~/.config/pyseq/machine_settings.yaml
-
-   This YAML file store hardware configurations and settings for all the 
-   instrumentation in the sequencer.
-   Multiple sequencers or versions can be stored in 1 file.
-   The top level key `name` specifies which sequencer or version to use. 
-
-   If the file does not exist, settings from repository will be used.  
-"""
-
 # --- DEFAULT_CONFIG Configuration ---
 # This section handles the loading of default experiment/software configurations.
+DEFAULT_CONFIG_PATH = Path.home() / ".config/pyseq/default.toml"
+DEFAULT_CONFIG_RESOURCE = RESOURCE_PATH.joinpath("resources/default.toml")
+"""Path to the default experiment configuration TOML file.
+
+If `PYTEST_VERSION` environment variable is set and the machine name
+contains "test" or "virtual", the default configuration from the `pyseq_core`
+package resources is used. Otherwise, it defaults to `~/.config/pyseq/default.toml`.
+"""
+
+if not DEFAULT_CONFIG_PATH.exists():
+    # Copy settings from package if local machine setting do not exist
+    resource_path = importlib.resources.files("pyseq_core")
+    shutil.copy(DEFAULT_CONFIG_RESOURCE, DEFAULT_CONFIG_PATH)
 
 # Default settings for experiment/software
 machine_name = machine_name.lower()
@@ -64,25 +71,13 @@ if os.environ.get("PYTEST_VERSION") is not None and (
 ):
     # use default experiment config and machine settings from package resources
     LOGGER.info("Using package default.toml")
-    resource_path = importlib.resources.files("pyseq_core")
-    DEFAULT_CONFIG_PATH = resource_path.joinpath("resources/default.toml")
-    MACHINE_SETTINGS_PATH = resource_path.joinpath("resources/machine_settings.yaml")
-
+    DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_RESOURCE
     # override HW_CONFIG with package resource
-    with open(MACHINE_SETTINGS_PATH, "r") as f:
+    with open(MACHINE_SETTINGS_RESOURCE, "r") as f:
         LOGGER.info("Using package machine_settings.yaml")
         all_settings = yaml.safe_load(f)  # Machine config
         machine_name = all_settings["name"]
         HW_CONFIG = all_settings[machine_name]
-else:
-    # use default experiment config and machine settings from local machine
-    DEFAULT_CONFIG_PATH = Path.home() / ".config/pyseq/default.toml"
-"""Path to the default experiment configuration TOML file.
-
-If `PYTEST_VERSION` environment variable is set and the machine name
-contains "test" or "virtual", the default configuration from the `pyseq_core`
-package resources is used. Otherwise, it defaults to `~/.config/pyseq/default.toml`.
-"""
 
 # Read default config and machine settings
 DEFAULT_CONFIG = tomlkit.parse(open(DEFAULT_CONFIG_PATH).read())
