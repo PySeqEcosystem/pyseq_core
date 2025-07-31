@@ -209,8 +209,8 @@ def map_coms(com_class: BaseCOM):
     """
     _coms = {}
     for instrument, values in HW_CONFIG.items():
-        if "address" in values:
-            _coms[instrument] = values["address"]
+        if "com" in values:
+            _coms[instrument] = values["com"]["address"]
 
     coms = {}
     for instrument, address in _coms.items():
