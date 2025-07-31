@@ -225,12 +225,13 @@ def map_coms(com_class: BaseCOM):
         elif address in _coms:
             # If the address is also an instrument name (e.g., 'COM1': {'address': 'COM1'}),
             # create a new COM object for the address and assign it to both.
-            coms[address] = com_class(address)
+            coms[address] = com_class(instrument, address)
             coms[instrument] = coms[address]
         elif instrument in coms:
             # If the instrument already has a COM object (e.g., from a previous alias), do nothing
             pass
         else:
             # If neither the address nor the instrument is already mapped, create a new COM object
-            coms[instrument] = com_class(address)
+            coms[instrument] = com_class(instrument, address)
+
     return coms
