@@ -595,28 +595,24 @@ class BaseFlowCell(BaseSystem):
         self.add_task(description, self._roi_to_microscope, "expose", roi)
 
     def update_protocol_name(self, name: str):
+        """Queue a task to update the protocol name."""
         description = f"Start protocol {name}"
-        self.add_task(description, self.update_protocol_name_task, name)
+        self.add_task(description, self._update_protocol_name, name)
 
-    def update_protocol_name_task(self, name: str):
+    def _update_protocol_name(self, name: str):
         self._protocol_name = name
-        # LOGGER.info(f"Start protocol {name}")
+        self._protocol_cycle = 0
 
-    def update_protocol_cycle(self, cycle: int, total_cycles: int):
+    def update_protocol_cycle(self, cycle: int, total_cycles: int, protocol_name: str):
+        """Queue a task to update the protocol cycle."""
         if total_cycles > 1:
             description = (
-                f"Start {cycle}/{total_cycles} of protocol {self._protocol_name}"
+                f"Start cycle {cycle}/{total_cycles} of protocol {protocol_name}"
             )
-            self.add_task(
-                description, self.update_protocol_cycle_task, cycle, total_cycles
-            )
+            self.add_task(description, self._update_protocol_cycle)
 
-    def update_protocol_cycle_task(self, cycle: int, total_cycles: int):
-        self._protocol_cycle = cycle
-        # if total_cycles > 1:
-        #     LOGGER.info(
-        #         f"Start {cycle}/{total_cycles} of protocol {self._protocol_name}"
-        #     )
+    def _update_protocol_cycle(self):
+        self._protocol_cycle += 1
 
     async def _hold(self, duration):
         """Async hold for specified duration in minutes."""
@@ -1038,7 +1034,7 @@ class BaseSequencer(BaseSystem):
             self.flowcells[flowcell].update_protocol_name(pname)
             for cycle in range(protocol["cycles"]):
                 self.flowcells[flowcell].update_protocol_cycle(
-                    cycle + 1, protocol["cycles"]
+                    cycle + 1, protocol["cycles"], pname
                 )
                 for step in protocol["steps"]:
                     LOGGER.debug(f"Added {step[0]}, {step[1]} on flowcell {flowcell}")
