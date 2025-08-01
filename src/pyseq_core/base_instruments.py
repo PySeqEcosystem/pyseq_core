@@ -1,8 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from pyseq_core.utils import MACHINE_SETTINGS_PATH
+from pyseq_core.utils import HW_CONFIG
 from pyseq_core.base_com import BaseCOM
-import yaml
 from attrs import define, field
 from typing import Union
 from functools import cached_property
@@ -13,7 +12,7 @@ import asyncio
 class BaseInstrument(ABC):
     name: str
     com: BaseCOM = field(init=False)
-    config: dict = field(init=False)
+
     """
     Abstract base class for instrument implementations.
 
@@ -23,27 +22,11 @@ class BaseInstrument(ABC):
     Attributes:
         name (str): The name of the instrument.
         com (BaseCOM): The communication interface for the instrument.
-        config (dict): The configuration settings for the instrument, loaded from a YAML file.
     """
 
-    @config.default
-    def get_config(self) -> dict:
-        """Get instrument configuration settings from the machine settings file.
-
-        This method reads the global machine settings file (MACHINE_SETTINGS_PATH),
-        identifies the current machine's name, and then extracts the configuration
-        specific to this instrument instance.
-
-        Returns:
-            dict: A dictionary containing the instrument's configuration settings.
-                Returns an empty dictionary if the machine name or instrument
-                configuration is not found.
-        """
-        # Get instrument configuration settings
-        with open(MACHINE_SETTINGS_PATH, "r") as f:
-            config = yaml.safe_load(f)  # Machine config
-        machine_name = config.get("name", None)  # Machine name
-        return config.get(machine_name, {}).get(self.name, {})
+    @cached_property
+    def config(self) -> dict:
+        return HW_CONFIG[self.name]
 
     async def command(self, command: Union[str, dict]):
         """Send a command string to the instrument.
