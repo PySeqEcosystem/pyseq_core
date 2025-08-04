@@ -137,7 +137,7 @@ def setup_experiment_path(exp_config: dict, exp_name: str) -> dict:
     if len(exp_name) == 0:
         exp_name = exp_config["experiment"]["name"]
     if len(exp_name) == 0:
-        exp_name = "PySeq_" + datetime.now().strftime("%Y%m%d")
+        exp_name = "PySeq_" + datetime.datetime.now().strftime("%Y%m%d")
     exp_config["experiment"]["name"] = exp_name
     # Setup paths output paths for images, logs, and focus data
     output_path = Path(exp_config["experiment"]["output_path"]) / exp_name
@@ -185,8 +185,22 @@ def update_logger(logger_conf: dict, rotating: bool = False):
         del logger_conf["handlers"]["rotatingHandler"]
 
     logger_conf["loggers"]["PySeq"]["handlers"] = list(logger_conf["handlers"].keys())
-    # Need to import logging.config or get an AttributeError, not sure why.
-    logging.config.dictConfig(logger_conf)
+
+    if not os.environ.get("PYTEST_VERSION"):
+        # Need to import logging.config or get an AttributeError, not sure why.
+        logging.config.dictConfig(logger_conf)
+    else:
+        # Add file handler to logger to use caplog in pytest
+        # Tried passing disable_existing_loggers = False to dictConfig,
+        # But caplog still gets over written
+        logger = logging.getLogger("PySeq")
+        fname = logger_conf["handlers"]["fileHandler"]["filename"]
+        fmt_ = logger_conf["formatters"]["long"]
+        fmt = logging.Formatter(fmt=fmt_["format"], datefmt=fmt_["datefmt"])
+        handler = logging.FileHandler(filename=fname)
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(fmt)
+        logger.addHandler(handler)
 
 
 def map_coms(com_class: BaseCOM):

@@ -43,7 +43,7 @@ waste_flow_rate = 12000                                                         
 
 [logging]
 version = 1
-disable_existing_loggers = true
+disable_existing_loggers = false
 
 [logging.formatters.brief]
 format = "%(asctime)s | %(levelname)s - %(message)s"
@@ -74,7 +74,7 @@ formatter = "long"
 filename = ""
 
 [logging.loggers.PySeq]
-level = "DEBUG"
+level = "INFO"
 handlers = []
 propagate = false
 

@@ -927,7 +927,6 @@ class BaseSequencer(BaseSystem):
         # Add rois to flowcells
         was_roi_added = []
         for roi in rois:
-            LOGGER.info(roi)
             was_roi_added.append(self._roi_manager.add(roi))
         # Wake up flowcells waiting for ROIs
         if self._roi_manager.roi_condition.locked() and all(was_roi_added):

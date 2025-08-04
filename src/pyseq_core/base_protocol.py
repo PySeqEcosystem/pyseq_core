@@ -949,4 +949,4 @@ def check_for_rois(fprotocols: dict) -> bool:
 
 def read_user_config(config_path: str) -> dict:
     user_config = tomlkit.parse(open(config_path).read())
-    return deep_merge(user_config, DEFAULT_CONFIG)
+    return deep_merge(user_config, DEFAULT_CONFIG.copy())
