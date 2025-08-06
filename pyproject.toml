@@ -29,7 +29,7 @@ Homepage = "https://github.com/pypa/sampleproject"
 Issues = "https://github.com/pypa/sampleproject/issues"
 
 [tool.setuptools_scm]
-version_file = "src/_version.py"
+version_file = "src/pyseq_core/_version.py"
 
 [project.optional-dependencies]
 dev = []
