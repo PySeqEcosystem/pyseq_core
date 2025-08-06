@@ -9,7 +9,7 @@ updates:
       interval: "weekly"
     cooldown:
         semver-major-days: 30
-    #groups:
+    groups:
     #   production-dependencies:
     #   # dependency-type not supported by uv
     #     dependency-type: "production"
@@ -18,9 +18,12 @@ updates:
     #   development-dependencies:
     #  # dependency-type not supported by uv
     #     dependency-type: "development"
-    #   pyseq:
-    #     patterns:
-    #     - "pyseq*"
+      dependencies:
+        exclude-patterns: 
+        - "pyseq*"
+      pyseq:
+        patterns:
+        - "pyseq*"
 
         
 
