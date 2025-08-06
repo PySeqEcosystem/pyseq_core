@@ -26,15 +26,8 @@ jobs:
       - name: Install the latest version of uv
         uses: astral-sh/setup-uv@v6
 
-      # - uses: actions/setup-python@v5
-      #  with:
-      #    python-version: "3.x"
-
       - name: Build release distributions
         run: |
-          # NOTE: put your own distribution build steps here.
-          # python -m pip install build
-          # python -m build
           uv build
 
       - name: Upload distributions
