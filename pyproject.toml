@@ -1,10 +1,13 @@
 [build-system]
-requires = ["setuptools>=64", "setuptools-scm>=8"]
-build-backend = "setuptools.build_meta"
+#requires = ["setuptools>=64", "setuptools-scm>=8"]
+#build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.8.5,<0.9.0"]
+build-backend = "uv_build"
 
 [project]
-name = "pyseq_core"
-dynamic = ["version"]
+name = "pyseq-core"
+version = "1.1.0-alpha"
+#dynamic = ["version"]
 authors = [
   { name="Kunal Pandit", email="kpandit@nygenome.org" },
 ]
@@ -28,15 +31,16 @@ dependencies = [
 Homepage = "https://github.com/pypa/sampleproject"
 Issues = "https://github.com/pypa/sampleproject/issues"
 
-[tool.setuptools_scm]
-version_file = "src/pyseq_core/_version.py"
-fallback_version = "0.0.0"
+#[tool.setuptools_scm]
+#version_file = "src/pyseq_core/_version.py"
+#fallback_version = "0.0.0"
+
+#[tool.setuptools.packages.find]
+#where = ["src"]
 
 [project.optional-dependencies]
 dev = []
 
-[tool.setuptools.packages.find]
-where = ["src"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
