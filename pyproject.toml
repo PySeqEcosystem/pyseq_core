@@ -30,6 +30,7 @@ Issues = "https://github.com/pypa/sampleproject/issues"
 
 [tool.setuptools_scm]
 version_file = "src/pyseq_core/_version.py"
+fallback_version = "0.0.0"
 
 [project.optional-dependencies]
 dev = []
