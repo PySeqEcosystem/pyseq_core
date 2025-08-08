@@ -197,10 +197,10 @@ class BaseSystem(ABC):
         description = f"Shutdown {self.name}"
         self.add_task(description, self._shutdown)
 
-    def configure(self):
+    def configure(self, exp_config: dict):
         """Configure the system."""
         description = f"Configure {self.name}"
-        self.add_task(description, self._configure)
+        self.add_task(description, self._configure, exp_config)
 
     def pause(self):
         """Pause the system queue."""
@@ -288,7 +288,7 @@ class BaseSystem(ABC):
         return False
 
     @abstractmethod
-    async def _configure(self, command):
+    async def _configure(self, exp_config: dict):
         """Configure the system."""
         pass
 
@@ -954,7 +954,7 @@ class BaseSequencer(BaseSystem):
     async def _new_experiment(
         self, fc_names: Union[str, int], exp_config_path: str, exp_name: str = ""
     ):
-        """Load new experimenet task."""
+        """Load new experiment task."""
 
         # Read experiment config
         exp_config = read_user_config(exp_config_path)
@@ -972,6 +972,8 @@ class BaseSequencer(BaseSystem):
             fc._exp_config = exp_config
             fc.ROIs = dict()
             fc.reagents = dict()
+
+        await self._configure(exp_config)
 
         # Add reagents from experiment config to flowcells
         for fc in flowcells:

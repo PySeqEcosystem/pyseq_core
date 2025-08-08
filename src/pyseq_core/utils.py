@@ -9,6 +9,8 @@ import logging
 import logging.config  # Need to import, or I get an AttributeError?
 import datetime
 from pyseq_core.base_com import BaseCOM
+import re
+from typing import Union, TypeVar, Type
 
 
 LOGGER = logging.getLogger("PySeq")
@@ -18,6 +20,21 @@ LOGGER = logging.getLogger("PySeq")
 # This section handles the loading of machine-specific hardware configurations.
 # Local machine specific settings
 RESOURCE_PATH = importlib.resources.files("pyseq_core")
+# Use resource file from a different "pyseq" package
+if os.environ.get("PYTEST_VERSION") is not None:
+    import inspect
+
+    caller_frame = inspect.stack()
+    pattern = re.compile(r"(pyseq[\w|-|_]+)", re.IGNORECASE)
+    for frame in caller_frame:
+        match = re.search(pattern, frame.filename)
+        if match:
+            package = match.groups()[0].lower()
+            if package != "pyseq_core":
+                RESOURCE_PATH = importlib.resources.files(package)
+                break
+
+
 MACHINE_SETTINGS_PATH = Path.home() / ".config/pyseq/machine_settings.yaml"
 MACHINE_SETTINGS_RESOURCE = RESOURCE_PATH.joinpath("resources/machine_settings.yaml")
 """Path to the machine-specific hardware configuration YAML file.
@@ -78,6 +95,13 @@ if os.environ.get("PYTEST_VERSION") is not None and (
         all_settings = yaml.safe_load(f)  # Machine config
         machine_name = all_settings["name"]
         HW_CONFIG = all_settings[machine_name]
+
+
+def ins():
+    import inspect
+
+    return inspect.stack()
+
 
 # Read default config and machine settings
 DEFAULT_CONFIG = tomlkit.parse(open(DEFAULT_CONFIG_PATH).read())
@@ -203,12 +227,14 @@ def update_logger(logger_conf: dict, rotating: bool = False):
         logger.addHandler(handler)
 
 
-def map_coms(com_class: BaseCOM):
+def map_coms(
+    com_class: BaseCOM, address_dict: dict = None, hw_config: dict = HW_CONFIG
+):
     """Maps instrument names to their communication instances.
 
     This function iterates through the `HW_CONFIG` to identify instruments
-    that have an "address". It then creates or reuses instances of `com_class`
-    for these addresses, ensuring that multiple instruments sharing the same
+    that have a COM identifiers. It then creates or reuses instances of `com_class`
+    for these identifiers, ensuring that multiple instruments sharing the same
     physical communication address (e.g., a serial port) share the same
     communication object.
 
@@ -216,31 +242,71 @@ def map_coms(com_class: BaseCOM):
         com_class (BaseCOM): The class to instantiate for communication objects.
             This class is expected to be a concrete implementation of `BaseCOM`
             and take an address as its constructor argument.
+        address_dict: Dictionary with identifiers as key and communications addresses as values
 
     Returns:
         dict: A dictionary where keys are instrument names (or communication addresses
             if an instrument shares an address) and values are instances of `com_class`.
     """
     _coms = {}
-    for instrument, values in HW_CONFIG.items():
+    for instrument, values in hw_config.items():
         if "com" in values:
             _coms[instrument] = values["com"]["address"]
 
     coms = {}
-    for instrument, address in _coms.items():
-        if address in coms:
+    for instrument, com_id in _coms.items():
+        if address_dict is None:
+            # Identifier is the actual address
+            address = com_id
+        else:
+            # Get actual address from identifier
+            address = address_dict.get(com_id, None)
+
+        config = hw_config[instrument]["com"]
+        if com_id in coms:
             # If the address already has a COM object, assign it to this instrument
-            coms[instrument] = coms[address]
-        elif address in _coms:
-            # If the address is also an instrument name (e.g., 'COM1': {'address': 'COM1'}),
+            coms[instrument] = coms[com_id]
+            LOGGER.debug(
+                f"{instrument} using shared coms at {coms[instrument].address}"
+            )
+        elif com_id in _coms:
+            # If the address is also an instrument name (e.g., 'Instrument1': {'address': 'Instrument1'}),
             # create a new COM object for the address and assign it to both.
-            coms[address] = com_class(instrument, address)
-            coms[instrument] = coms[address]
+            coms[com_id] = com_class(name=instrument, address=address, config=config)
+            LOGGER.debug(f"{com_id} using shared coms at {coms[com_id].address}")
+            if instrument not in coms:
+                coms[instrument] = coms[com_id]
+                LOGGER.debug(
+                    f"{instrument} using shared coms at {coms[instrument].address}"
+                )
         elif instrument in coms:
+            LOGGER.debug(f"{instrument} already assigned to {coms[instrument].address}")
             # If the instrument already has a COM object (e.g., from a previous alias), do nothing
-            pass
+        elif com_id not in coms:
+            LOGGER.error(f"Could not find coms with id {com_id} for {instrument}")
+            coms[instrument] = com_class(
+                name=instrument, address=address, config=config
+            )
         else:
             # If neither the address nor the instrument is already mapped, create a new COM object
-            coms[instrument] = com_class(instrument, address)
+            coms[instrument] = com_class(
+                name=instrument, address=address, config=config
+            )
+            LOGGER.debug(f"{instrument} using coms at {coms[instrument].address}")
 
     return coms
+
+
+T = TypeVar("T", bound=object)
+
+
+def parse(
+    pattern: re.Pattern, string: str, attributes: Type[T] = None
+) -> Union[T, tuple]:
+    match = re.search(pattern, string)
+    if match and attributes is not None:
+        return attributes(*match.groups())
+    elif match:
+        return match.groups()
+    elif not match:
+        raise ValueError(f"Could not parse {pattern} with {string}")

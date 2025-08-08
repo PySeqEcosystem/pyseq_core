@@ -8,10 +8,10 @@ from functools import cached_property
 import asyncio
 
 
-@define
+@define()
 class BaseInstrument(ABC):
-    name: str
-    com: BaseCOM = field(init=False)
+    name: str = field()
+    com: BaseCOM = field(default=None)
 
     """
     Abstract base class for instrument implementations.
@@ -76,7 +76,7 @@ class BaseInstrument(ABC):
         """
 
     @abstractmethod
-    async def configure(self):
+    async def configure(self, exp_config: dict):
         """Configure the instrument.
 
         This method should be implemented by subclasses to apply specific
@@ -193,7 +193,7 @@ class BasePump(BaseInstrument):
         Returns:
             Union[float, int]: The minimum volume.
         """
-        return self.config.get("volume").get("min_val")
+        return self.config.get("volume").get("min_val", 1)
 
     @cached_property
     def max_volume(self) -> Union[float, int]:
@@ -205,7 +205,7 @@ class BasePump(BaseInstrument):
         Returns:
             Union[float, int]: The maximum volume.
         """
-        return self.config.get("volume").get("max_val")
+        return self.config.get("volume").get("max_val", 2000)
 
     @cached_property
     def min_flow_rate(self) -> Union[float, int]:
@@ -217,7 +217,7 @@ class BasePump(BaseInstrument):
         Returns:
             Union[float, int]: The minimum flow rate.
         """
-        return self.config.get("flow_rate").get("min_val")
+        return self.config.get("flow_rate").get("min_val", 100)
 
     @cached_property
     def max_flow_rate(self) -> Union[float, int]:
@@ -229,7 +229,7 @@ class BasePump(BaseInstrument):
         Returns:
             Union[float, int]: The maximum flow rate.
         """
-        return self.config.get("flow_rate").get("max_val")
+        return self.config.get("flow_rate").get("max_val", 20000)
 
     @abstractmethod
     async def pump(
@@ -364,7 +364,7 @@ class BaseValve(BaseInstrument):
 
 @define
 class BaseLaser(BaseInstrument):
-    color: str = field()
+    color: str = field(default=None)
     _power: Union[int, float] = field(init=False)
 
     """Abstract base class for laser instruments.

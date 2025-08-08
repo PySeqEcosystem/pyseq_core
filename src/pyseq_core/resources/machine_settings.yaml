@@ -5,7 +5,7 @@ Test:
     com: &com
       baudrate: 9600
       timeout: 1
-      address: COM1
+      address: KLOEHNAA
     volume:
       min_val: 100 #uL 
       max_val: 2000 #uL
@@ -18,7 +18,7 @@ Test:
     <<: *pump
     com: 
       <<:: *com
-      address: COM2
+      address: KLOEHNBA
   ValveA: &reagent_valve
     com:
       <<: *com

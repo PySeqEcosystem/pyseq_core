@@ -306,7 +306,7 @@ class TestMicroscope(BaseMicroscope):
         }
         return instruments
 
-    async def _configure(self):
+    async def _configure(self, exp_config):
         LOGGER.debug(f"Configure {self.name}")
 
     async def _capture(self, roi: ROIType, im_name: str):
@@ -427,7 +427,7 @@ class TestFlowCell(BaseFlowCell):
         }
         return instruments
 
-    async def _configure(self):
+    async def _configure(self, exp_config):
         """Configure the flowcell."""
         LOGGER.debug(f"Configure {self.name}")
 
@@ -447,7 +447,7 @@ class TestSequencer(BaseSequencer):
     def set_flowcells(self):
         return {fc: TestFlowCell(name=fc) for fc in ["A", "B"]}
 
-    async def _configure(self):
+    async def _configure(self, exp_config):
         LOGGER.debug(f"Configuring {self.name}")
 
     def custom_roi_stage(self, flowcell: Union[str, int], **kwargs) -> ROIType:
