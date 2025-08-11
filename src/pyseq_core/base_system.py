@@ -104,7 +104,7 @@ class BaseSystem(ABC):
         self._pause_event.clear()
 
         # Getting System Settings
-        self._config = HW_CONFIG
+        self._config = HW_CONFIG[self.name]
 
         # Call extra post initialization methods
         self.__extra_post_init__()
@@ -252,15 +252,15 @@ class BaseSystem(ABC):
                 _.append(no_com())
         msgs = await asyncio.gather(*_)
 
-        LOGGER.info(f"Configuring {self.name}")
         _ = []
         for instrument, msg in zip(self.iter_instruments, msgs):
             if msg is not None:
                 LOGGER.info(f"{instrument.name} {msg}")
-            _.append(instrument.configure())
-        await asyncio.gather(*_)
-        # Configure system
-        await self._configure()
+        #     _.append(instrument.configure())
+        # LOGGER.info(f"Configuring {self.name}")
+        # await asyncio.gather(*_)
+        # # Configure system
+        # await self._configure()
 
         LOGGER.info(f"Initializing {self.name}")
         _ = []

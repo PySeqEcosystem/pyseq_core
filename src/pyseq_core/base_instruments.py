@@ -24,6 +24,10 @@ class BaseInstrument(ABC):
         com (BaseCOM): The communication interface for the instrument.
     """
 
+    @property
+    def connected(self):
+        return self.com._connected
+
     @cached_property
     def config(self) -> dict:
         return HW_CONFIG[self.name]
