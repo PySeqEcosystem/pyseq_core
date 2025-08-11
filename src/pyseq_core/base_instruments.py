@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from pyseq_core.utils import HW_CONFIG
 from pyseq_core.base_com import BaseCOM
 from attrs import define, field
-from typing import Union
+from typing import Union, List
 from functools import cached_property
 import asyncio
 
@@ -272,6 +272,7 @@ class BasePump(BaseInstrument):
 @define
 class BaseValve(BaseInstrument):
     _port: Union[str, int] = field(init=False)
+    ports: List[int] = field(init=False)
     """
     Abstract base class for a valve instrument.
 
@@ -312,18 +313,9 @@ class BaseValve(BaseInstrument):
         """
         pass
 
-    @_port.default
-    def initial_port_value(self):
-        """Provides the initial default value for the `_port` attribute.
-
-        This method sets the initial cached port to the first port listed
-        in the `ports` cached property (which is derived from the instrument's
-        configuration). Initialize the Valve to this port in concrete subclasses.
-
-        Returns:
-            Union[str, int]: The first valid port from the configuration.
-        """
-        return self.ports[0]
+    @ports.default
+    def default_ports(self):
+        self.config["port"]["valid_list"]
 
     @cached_property
     def ports(self):

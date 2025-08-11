@@ -3,7 +3,6 @@ from typing import Union, Any
 from attrs import define, field
 import asyncio
 import logging
-from functools import cached_property
 
 LOGGER = logging.getLogger("PySeq")
 
@@ -65,88 +64,3 @@ class BaseCOM(ABC):
             self._cmdid = 0
         self._cmdid += 1
         return f"{self._cmdid:04d}"
-
-
-@define(kw_only=True)
-class SerialCOM(BaseCOM):
-    rx_address: str = field(default=None)
-
-    @cached_property
-    def prefix(self):
-        return self.config["prefix"]
-
-    @cached_property
-    def suffix(self):
-        return self.config["suffix"]
-
-    async def connect(self, baudrate: int = 9600, timeout: int = 1) -> None:
-        import serial
-        import io
-
-        async with self.lock:
-            self.tx = serial.Serial(
-                port=self.address, baudrate=baudrate, timeout=timeout
-            )
-
-            if self.rx_address is not None:
-                # Add seperate response serial port, like for HiSeq 2500 FPGA
-                self.rx = serial.Serial(
-                    port=self.rx_address, baudrate=baudrate, timeout=timeout
-                )
-            else:
-                # use the same serial port for responses, most instrumentation
-                self.rx = self.tx
-
-            self.com = io.TextIOWrapper(
-                io.BufferedRWPair(self.tx, self.rx), encoding="ascii", errors="ignore"
-            )
-
-    async def write(self, command: str):
-        command = f"{self.prefix}{command}{self.suffix}"
-        self.com.write(command)
-        self.com.flush()
-        LOGGER.debug(f"{self.name} :: tx :: {command}")
-
-    async def read(self) -> str:
-        response = self.com.readline()
-        LOGGER.debug(f"{self.name} :: rx :: {response}")
-        return response
-
-    async def command(self, command: str) -> str:
-        async with self.lock:
-            await self.write(command)
-            return await self.read()
-
-    async def close(self):
-        async with self.lock:
-            self.tx.close()
-            if self.rx_address is not None:
-                self.rx.close()
-
-
-@define(kw_only=True)
-class EmulatedSerialCOM(BaseCOM):
-    config: dict
-
-    @cached_property
-    def prefix(self):
-        return self.config["prefix"]
-
-    @cached_property
-    def suffix(self):
-        return self.config["suffix"]
-
-    async def connect(self) -> None:
-        """Emulate connection to serial port"""
-        async with self.lock:
-            LOGGER.debug(f"{self.name} emulating connection to {self.address}")
-
-    async def close(self) -> bool:
-        """Emulate closing a connection to serial port.
-
-        Returns:
-            bool: True if the connection is gracefully closed, otherwise False.
-        """
-        async with self.lock:
-            LOGGER.debug(f"{self.name} emulating closing connection to {self.address}")
-        return True

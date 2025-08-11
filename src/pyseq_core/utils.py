@@ -4,7 +4,7 @@ import tomlkit
 import yaml
 import os
 import shutil
-import importlib
+from importlib import resources
 import logging
 import logging.config  # Need to import, or I get an AttributeError?
 import datetime
@@ -19,7 +19,7 @@ LOGGER = logging.getLogger("PySeq")
 # --- MACHINE_SETTINGS Configuration ---
 # This section handles the loading of machine-specific hardware configurations.
 # Local machine specific settings
-RESOURCE_PATH = importlib.resources.files("pyseq_core")
+RESOURCE_PATH = resources.files("pyseq_core")
 # Use resource file from a different "pyseq" package
 if os.environ.get("PYTEST_VERSION") is not None:
     import inspect
@@ -31,7 +31,7 @@ if os.environ.get("PYTEST_VERSION") is not None:
         if match:
             package = match.groups()[0].lower()
             if package != "pyseq_core":
-                RESOURCE_PATH = importlib.resources.files(package)
+                RESOURCE_PATH = resources.files(package)
                 break
 
 
@@ -52,7 +52,7 @@ if not MACHINE_SETTINGS_PATH.exists():
     # Copy settings from package if local machine setting do not exist
     os.makedirs(MACHINE_SETTINGS_PATH.parent, exist_ok=True)
     os.makedirs(MACHINE_SETTINGS_PATH.parent / "logs", exist_ok=True)
-    resource_path = importlib.resources.files("pyseq_core")
+    resource_path = resources.files("pyseq_core")
     shutil.copy(MACHINE_SETTINGS_RESOURCE, MACHINE_SETTINGS_PATH)
 
 with open(MACHINE_SETTINGS_PATH, "r") as f:
@@ -78,7 +78,7 @@ package resources is used. Otherwise, it defaults to `~/.config/pyseq/default.to
 
 if not DEFAULT_CONFIG_PATH.exists():
     # Copy settings from package if local machine setting do not exist
-    resource_path = importlib.resources.files("pyseq_core")
+    resource_path = resources.files("pyseq_core")
     shutil.copy(DEFAULT_CONFIG_RESOURCE, DEFAULT_CONFIG_PATH)
 
 # Default settings for experiment/software
