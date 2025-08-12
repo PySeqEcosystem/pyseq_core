@@ -59,24 +59,8 @@ PumpCommand = PumpCommandFactory.factory(DEFAULT_CONFIG)
 PumpCommandType = Type[PumpCommand]
 
 
-# class PumpCommand(DefaultPump):
-#     pass
-
-
 ROI = ROIFactory.factory(DEFAULT_CONFIG)
 ROIType = Type[ROI]
-
-
-# class ROI(DefaultROI):
-#     pass
-
-# SimpleStage = SimpleStageFactory.factory(DEFAULT_CONFIG)
-# SimpleStage = SimpleStageFactory.factory(DEFAULT_CONFIG)
-# DefaultSimpleStage = SimpleStageFactory(DEFAULT_CONFIG)
-
-
-# class SimpleStage(DefaultSimpleStage):
-#     pass
 
 
 @define(kw_only=True)
@@ -104,7 +88,7 @@ class BaseSystem(ABC):
         self._pause_event.clear()
 
         # Getting System Settings
-        self._config = HW_CONFIG[self.name]
+        self._config = HW_CONFIG.get(self.name, HW_CONFIG)
 
         # Call extra post initialization methods
         self.__extra_post_init__()
@@ -240,27 +224,11 @@ class BaseSystem(ABC):
     async def _initialize(self):
         """Connect to instruments, then configure and initialize system."""
 
-        async def no_com():
-            return None
-
         LOGGER.info(f"{self.name} Connecting to instruments")
         _ = []
         for instrument in self.iter_instruments:
-            if instrument.com is not None:
-                _.append(instrument.com.connect())
-            else:
-                _.append(no_com())
-        msgs = await asyncio.gather(*_)
-
-        _ = []
-        for instrument, msg in zip(self.iter_instruments, msgs):
-            if msg is not None:
-                LOGGER.info(f"{instrument.name} {msg}")
-        #     _.append(instrument.configure())
-        # LOGGER.info(f"Configuring {self.name}")
-        # await asyncio.gather(*_)
-        # # Configure system
-        # await self._configure()
+            _.append(instrument.com.connect())
+        await asyncio.gather(*_)
 
         LOGGER.info(f"Initializing {self.name}")
         _ = []

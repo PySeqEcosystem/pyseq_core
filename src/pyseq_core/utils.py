@@ -1,4 +1,3 @@
-from __future__ import annotations
 from pathlib import Path
 import tomlkit
 import yaml
@@ -8,9 +7,11 @@ from importlib import resources
 import logging
 import logging.config  # Need to import, or I get an AttributeError?
 import datetime
-from pyseq_core.base_com import BaseCOM
 import re
-from typing import Union, TypeVar, Type
+from typing import Union, TypeVar, Type, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pyseq_core.base_com import BaseCOM
 
 
 LOGGER = logging.getLogger("PySeq")
@@ -83,9 +84,7 @@ if not DEFAULT_CONFIG_PATH.exists():
 
 # Default settings for experiment/software
 machine_name = machine_name.lower()
-if os.environ.get("PYTEST_VERSION") is not None and (
-    "test" in machine_name or "virtual" in machine_name
-):
+if os.environ.get("PYTEST_VERSION") is not None and ("test" in machine_name):
     # use default experiment config and machine settings from package resources
     LOGGER.info("Using package default.toml")
     DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_RESOURCE
@@ -95,13 +94,6 @@ if os.environ.get("PYTEST_VERSION") is not None and (
         all_settings = yaml.safe_load(f)  # Machine config
         machine_name = all_settings["name"]
         HW_CONFIG = all_settings[machine_name]
-
-
-def ins():
-    import inspect
-
-    return inspect.stack()
-
 
 # Read default config and machine settings
 DEFAULT_CONFIG = tomlkit.parse(open(DEFAULT_CONFIG_PATH).read())
@@ -228,7 +220,7 @@ def update_logger(logger_conf: dict, rotating: bool = False):
 
 
 def map_coms(
-    com_class: BaseCOM, address_dict: dict = None, hw_config: dict = HW_CONFIG
+    com_class: "BaseCOM", address_dict: dict = None, hw_config: dict = HW_CONFIG
 ):
     """Maps instrument names to their communication instances.
 
@@ -262,7 +254,6 @@ def map_coms(
             # Get actual address from identifier
             address = address_dict.get(com_id, None)
 
-        config = hw_config[instrument]["com"]
         if com_id in coms:
             # If the address already has a COM object, assign it to this instrument
             coms[instrument] = coms[com_id]
@@ -272,7 +263,7 @@ def map_coms(
         elif com_id in _coms:
             # If the address is also an instrument name (e.g., 'Instrument1': {'address': 'Instrument1'}),
             # create a new COM object for the address and assign it to both.
-            coms[com_id] = com_class(name=instrument, address=address, config=config)
+            coms[com_id] = com_class(name=instrument, address=address)
             LOGGER.debug(f"{com_id} using shared coms at {coms[com_id].address}")
             if instrument not in coms:
                 coms[instrument] = coms[com_id]
@@ -284,14 +275,10 @@ def map_coms(
             # If the instrument already has a COM object (e.g., from a previous alias), do nothing
         elif com_id not in coms:
             LOGGER.error(f"Could not find coms with id {com_id} for {instrument}")
-            coms[instrument] = com_class(
-                name=instrument, address=address, config=config
-            )
+            coms[instrument] = com_class(name=instrument, address=address)
         else:
             # If neither the address nor the instrument is already mapped, create a new COM object
-            coms[instrument] = com_class(
-                name=instrument, address=address, config=config
-            )
+            coms[instrument] = com_class(name=instrument, address=address)
             LOGGER.debug(f"{instrument} using coms at {coms[instrument].address}")
 
     return coms

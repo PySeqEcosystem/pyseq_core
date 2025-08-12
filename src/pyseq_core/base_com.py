@@ -3,6 +3,8 @@ from typing import Union, Any
 from attrs import define, field
 import asyncio
 import logging
+from pyseq_core.utils import HW_CONFIG
+from functools import cached_property
 
 LOGGER = logging.getLogger("PySeq")
 
@@ -11,10 +13,11 @@ LOGGER = logging.getLogger("PySeq")
 class BaseCOM(ABC):
     name: str = field()
     address: str = field()
-    config: dict = field()
     lock: asyncio.Lock = field(factory=asyncio.Lock)
     com: Any = field(default=None, init=False)
     _cmdid: int = field(default=0)
+    _connected: bool = field(default=False)
+
     """
     Abstract base class for communication interfaces.
 
@@ -25,6 +28,10 @@ class BaseCOM(ABC):
         lock (asyncio.Lock): An asyncio lock to ensure thread-safe access to the interface.
         com (Any): Actual communication interface
     """
+
+    @cached_property
+    def config(self):
+        return HW_CONFIG[self.name]["com"]
 
     @abstractmethod
     async def connect(self) -> Union[str, None]:

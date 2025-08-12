@@ -18,7 +18,8 @@ from pyseq_core.base_instruments import (
     BaseValve,
     BaseTemperatureController,
 )
-from pyseq_core.utils import BaseCOM, DEFAULT_CONFIG
+from pyseq_core.utils import DEFAULT_CONFIG
+from pyseq_core.base_com import BaseCOM
 from typing import Literal, Type, Union
 from attrs import define, field
 import logging

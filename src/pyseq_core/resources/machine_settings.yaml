@@ -1,6 +1,11 @@
 name: Test
 Test:
   flowcells: ['A', 'B']
+  A: &flowcell
+    inlet_port: 
+      2: 2
+      8: 8
+  B: *flowcell
   PumpA: &pump
     com: &com
       baudrate: 9600
