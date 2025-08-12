@@ -21,6 +21,8 @@ dependencies = [
   "attrs>=25.3.0",
   "pyyaml>=6.0.2",
   "pyserial>=3.5",
+  "pre-commit>=4.2.0",
+  "ruff>=0.12.7",
 ]
 
 
